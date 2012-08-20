@@ -1,0 +1,31 @@
+* { margin: 0; padding: 0; }
+body                            { font: 12px "Lucida Grande", Sans-Serif; background: url(images/bg.png); }
+
+#page-wrap { margin: 0 auto; width: 600px; position: relative; }
+
+#header h1 a { display: block; width: 173px; height: 79px; background: url(images/logo.jpg) no-repeat; text-indent: -9999px; }
+
+h1,h2,h3 { margin: 0 0 20px 0; font-weight: normal; }
+h1 { font-size: 36px; }
+h2 { font-size: 30px }
+h3 { font-size: 24px }
+a:focus { outline: 0; }
+
+label { font-size: 20px; } 
+
+#section { background: rgba(0,0,0,0.2); padding: 20px; }
+#userid { font-size: 20px; padding:8px 10px; width: 330px; }
+
+#rooms {  }
+#rooms ul { list-style: none; }
+#rooms ul li { margin: 0 0 5px 0; }
+#rooms li a { background: rgba(0,0,0,0.2); padding: 10px; -moz-border-radius: 10px; -webkit-border-radius: 10px; display: block; position: relative; }
+#rooms li a:hover { background: none; -moz-box-shadow: 0 0 5px black; -webkit-box-shadow: 0 0 5px black; }
+#rooms li a span { position: absolute; top: 15px; right: 10px; } 
+/* #rooms li a span strong { color: white; font-size: 20px; }  */
+#rooms li a strong { color: white; font-size: 20px; }
+#rooms a { text-decoration: none; color: #4fb90f; font: 18px;}
+
+
+#you { position: absolute; top: 45px; right: 0; font-size: 20px; background: rgba(0,0,0,0.2); padding: 5px 10px; }
+#you span { font: italic 12px Georgia, Serif;}
