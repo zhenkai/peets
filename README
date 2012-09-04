@@ -1,3 +1,7 @@
 This project is after Peet's Coffee & Tea, for no obvious reason.
 
 Supposedly, this project should be a demo of audio conferencing over NDN using WebRTC.
+
+I decided to use python for the local proxy partially because I'd like to
+practice python a little bit, and partially because the convenience brought by
+twisted and PyCCN.
