@@ -1,6 +1,7 @@
 from user import User
-from pyccn import Closure, CCN
+from pyccn import Closure, CCN, Interest, Name
 from pyccn._pyccn import CCNError
+import pyccn
 from log import Logger
 
 class Roster(Closure):
@@ -20,5 +21,17 @@ class Roster(Closure):
     else:
       self.handle = handle
 
+  def upcall(self, kind, upcallInfo):
+    if kind in [Closure.UPCALL_CONTENT, Closure.UPCALL_CONTENT_UNVERIFIED]:
+      return Closure.UPCALL_INTEREST_CONSUMED
+    elif kind == Closure.UPCALL_INTEREST:
+      pass
+    elif kind == Closure.UPCALL_INTEREST_TIMED_OUT:
+      return Closure.RESULT_REEXPRESS
+    else:
+      return Closure.RESULT_OK
+
+
 if __name__ == '__main__':
-  Roster('tester', '/test/ucla.edu')
+  roster1 = Roster('tester1', '/test/ucla.edu')
+  roster2 = Roster('tester2', '/test/ucla.edu')

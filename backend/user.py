@@ -4,9 +4,12 @@ class User(object):
   ''' Store the common information of a user '''
   Available, Unavailable = range(2)
 
-  def __init__(self, nick, prefix):
+  def __init__(self, nick, prefix, *args, **kwargs):
+    super(User, self).__init__()
     self.nick = nick
     self.prefix = prefix
+
+    print "Init User: %s %s" % (self.nick, self.prefix)
 
   def get_nick(self):
     return self.nick
@@ -16,8 +19,8 @@ class User(object):
 
 
 class RemoteUser(User, StateObject):
-  def __init__(self, nick, prefix, ttl = None):
-    super(RemoteUser, self).__init__(nick, prefix)
+  def __init__(self, nick, prefix, *args, **kwargs):
+    super(RemoteUser, self).__init__(nick, prefix, *args, **kwargs)
 
   def get_prescence(self):
     current_time = time()
@@ -26,3 +29,6 @@ class RemoteUser(User, StateObject):
     else:
       return Available
     
+
+if __name__ == '__main__':
+  ru = RemoteUser("hi", "/hi")
