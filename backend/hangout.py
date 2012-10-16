@@ -1,5 +1,5 @@
 from user import User, RemoteUser
-from time import time
+
 
 class Hangout(object):
   ''' Store the information of a hangout '''  
