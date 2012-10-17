@@ -6,9 +6,6 @@ class StateObject(object):
   default_ttl = 60
 
   def __init__(self, *args, **kwargs):
-    ''' somehow, this must also calls super in order for all 
-        base classes to be initialized when the subclass calls
-        its super init function'''
     super(StateObject, self).__init__()
     self.timestamp = kwargs.get('timestamp', time())
     self.ttl = kwargs.get('ttl', StateObject.default_ttl)

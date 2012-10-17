@@ -1,4 +1,4 @@
-from stateobject import StateObject
+from softstate import StateObject
 
 class User(object):
   ''' Store the common information of a user '''

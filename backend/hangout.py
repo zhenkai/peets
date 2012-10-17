@@ -1,5 +1,5 @@
 from user import User, RemoteUser
-from stateobject import StateObject
+from softstate import StateObject
 
 class Hangout(object):
   ''' Store the information of a hangout '''  
