@@ -1,17 +1,22 @@
 from user import User, RemoteUser
-
+from stateobject import StateObject
 
 class Hangout(object):
   ''' Store the information of a hangout '''  
 
   default_broadcast_prefix = '/ndn/broadcast'
 
-  def __init__(self, name, owner, email='unknown', 
-              broadcast_prefix = default_broadcast_prefix):
+  def __init__(self, name, owner, email, *args, **kwargs):
+    ''' somehow, this must also calls super in order for all 
+        base classes to be initialized when the subclass calls
+        its super init function'''
+    super(Hangout, self).__init__()
     self.name = name
     self.owner = owner
     self.email = email
-    self.broadcast_prefix = broadcast_prefix
+    self.broadcast_prefix = kwargs.get('broadcast_prefix', Hangout.default_broadcast_prefix)
+
+    print "Init Hangout"
 
   def get_name(self):
     return self.name
@@ -23,18 +28,11 @@ class Hangout(object):
     return email
 
 
-class RemoteHangout:
+class RemoteHangout(Hangout, StateObject):
   ''' Store the information of a hangout announced by remote parties '''
   
-  default_ttl = 60
+  def __init__(self, name, owner, email, *args, **kwargs):
+    super(RemoteHangout, self).__init__(name, owner, email, *args, **kwargs)
 
-  def __init__(self, name, owner, email = 'unknown', ttl = default_ttl):
-    super(RemoteHangout, self).__init__(name, owner, email)
-    self.timestamp = time()
-    self.ttl = ttl
-
-  def is_active(self):
-    return (time() - self.timestamp < self.ttl)
-
-  def refresh_timestamp(self):
-    self.timestamp = time()
+if __name__ == '__main__':
+  rh = RemoteHangout("hi", "hello", "zhenkai@ucla.edu")

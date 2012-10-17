@@ -5,6 +5,9 @@ class User(object):
   Available, Unavailable = range(2)
 
   def __init__(self, nick, prefix, *args, **kwargs):
+    ''' somehow, this must also calls super in order for all 
+        base classes to be initialized when the subclass calls
+        its super init function'''
     super(User, self).__init__()
     self.nick = nick
     self.prefix = prefix
@@ -23,12 +26,12 @@ class RemoteUser(User, StateObject):
     super(RemoteUser, self).__init__(nick, prefix, *args, **kwargs)
 
   def get_prescence(self):
-    current_time = time()
-    if (current_time - self.timestamp > self.ttl):
-      return Unavailable
+    if (self.is_active()):
+      return User.Unavailable
     else:
-      return Available
+      return User.Available
     
 
 if __name__ == '__main__':
   ru = RemoteUser("hi", "/hi")
+  print ru.get_prescence()
