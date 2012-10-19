@@ -5,7 +5,6 @@ class PeetsMessage(object):
   ''' a message class that carries prescence and NDN related info of a participant
   '''
   Join, Hello, Leave = range(3)  
-  __logger = Logger.get_logger('PeetsMessage')
 
   def __init__(self, msg_type, msg_from, *args, **kwargs):
     super(PeetsMessage, self).__init__()
@@ -37,11 +36,7 @@ class PeetsMessage(object):
       else:
         return PeetsMessage(dct['msg_type'], dct['msg_from'], audio_prefix = dct.get('audio_prefix'), audio_rate_hint = dct.get('audio_rate_hint'), audio_seq_hint = dct.get('audio_seq_hint'))
 
-    try:
       return json.loads(str_msg, object_hook = as_message)
-    except KeyError as e:
-      __logger.info("PeetsMessage does not have type or from", e)
-      return None
 
 
 if __name__ == '__main__':

@@ -67,7 +67,6 @@ if __name__ == '__main__':
       super(TestClosure, self).__init__()
 
     def upcall(self, kind, upcallInfo):
-#      global UPCALL_CONTENT, RESULT_OK
       if kind == pyccn.UPCALL_CONTENT:
         print upcallInfo.ContentObject.content
 

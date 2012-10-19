@@ -25,10 +25,11 @@ class FreshList(object):
   _logger = Logger.get_logger('FreshList')
 
   reap_interval = StateObject.default_ttl * 2
-  def __init__(self, *args, **kwargs):
+  def __init__(self, refresh_func, reap_callback, *args, **kwargs):
     super(FreshList, self).__init__()
     self.instances = dict() 
-    self.refresh_func = kwargs.get('refresh_func', None)
+    self.refresh_func = refresh_func
+    self.reap_callback = reap_callback
     # every operation to self.instances should grab self.__rlock first
     self.__rlock = RLock()
 
@@ -43,8 +44,11 @@ class FreshList(object):
 
   def reap(self):
     self.__rlock.acquire()
+    zombies = filter(lambda(k, state_object): not state_object.is_active(), self.instances.iteritems())
     self.instances = dict(filter(lambda (k, state_object): state_object.is_active(), self.instances.iteritems()))
     self.__rlock.release()
+    map(self.reap_callback, zombies)
+    
     # schedule the next reap
     interval = FreshList.reap_interval + randint(0, FreshList.reap_interval / 4)
     self.schedule_next(interval, self.reap)
@@ -59,12 +63,15 @@ class FreshList(object):
     finally:
       self.__rlock.release()
 
+  def get(self, k):
+    return self.instances.get(k, None)
+
   def add(self, k, state_object):
     self.__rlock.acquire()
     self.instances[k] = state_object
     self.__rlock.release()
     
-  def del(self, k):
+  def delete(self, k):
     self.__rlock.acquire()
     try:
       del self.instances[k]
@@ -75,7 +82,6 @@ class FreshList(object):
       self.__rlock.release()
   
   def refresh(self):
-    if self.refresh_func is not None:
       self.refresh_func()
 
     interval = StateObject.default_ttl - randint(0, StateObject.default_ttl / 4)
