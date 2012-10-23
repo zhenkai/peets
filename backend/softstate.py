@@ -1,6 +1,7 @@
 from time import time
 from threading import Timer, RLock
 from random import randint
+from log import Logger
 
 class StateObject(object):
   ''' store the information of a soft-state object'''
@@ -75,19 +76,19 @@ class FreshList(object):
     self.__rlock.acquire()
     try:
       del self.instances[k]
-    raise KeyError as e:
+    except KeyError as e:
       FreshList._logger.error("Try to del non-exist state object", e)
       raise e
     finally:
       self.__rlock.release()
   
   def refresh(self):
-      self.refresh_func()
+    self.refresh_func()
 
     interval = StateObject.default_ttl - randint(0, StateObject.default_ttl / 4)
     self.schedule_next(interval, self.refresh)
     
-  def schedule_next(self, interval, func)
+  def schedule_next(self, interval, func):
     t = Timer(interval, func)
     t.start()
 

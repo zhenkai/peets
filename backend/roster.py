@@ -39,7 +39,7 @@ class Roster(FreshList):
     self.ccnx_sock.send_interest(Name(name), PeetsMsgClosure(self.process_peets_msg))
 
   def process_peets_msg(self, interest, data):
-     ''' Assume the interest for peets msg would have a name like this:
+    ''' Assume the interest for peets msg would have a name like this:
     /user-data-prefix/peets_msg/session/seq
     This is because in the current implementation of chronos, it is the
     naming convention to have both session and seq
@@ -89,4 +89,23 @@ class Roster(FreshList):
     
     
 if __name__ == '__main__':
-  pass
+  def join_callback(ru):
+    print 'User %s joined' % ru.nick
+
+  def leave_callback(ru):
+    print 'User %s left' % ru.nick
+
+  def user_local_info_1():
+    return ('tom', '/tom', '/tom/audio', None, None)
+
+  def user_local_info_2():
+    return ('jerry', '/jerry', '/jerry/audio', None, None)
+
+  roster1 = Roster('/test/chat', join_callback, leave_callback, user_local_info_1)
+  roster2 = Roster('/test/chat', join_callback, leave_callback, user_local_info_2)
+
+  sleep(5)
+
+  roster2.leave()
+
+  sleep(5)

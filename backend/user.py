@@ -46,7 +46,7 @@ class RemoteUser(User, StateObject):
       return True
     elif self is not None and other is None:
       return False
-    else
+    else:
       return (self.nick == other.nick and self.preifx == other.prefix and self.audio_prefix == other.audio_prefix) 
     
 
