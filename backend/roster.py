@@ -14,11 +14,10 @@ class PeetsMsgClosure(Closure):
   def __init__(self, msg_callback):
     super(PeetsMsgClosure, self).__init__()
     self.msg_callback = msg_callback
-    print "Initialized PeetsMsgClosure"
 
   def upcall(self, kind, upcallInfo):
     if kind == pyccn.UPCALL_CONTENT:
-      print upcallInfo.ContentObject.content
+      print "Fetched data with name: " + str(upcallInfo.ContentObject.name)
       self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
 
     return pyccn.RESULT_OK
@@ -41,9 +40,12 @@ class Roster(FreshList):
     # probably it's also a good idea to pass in the ccnx_sock so that this class can share
     # a sock with others, but for now we're give it a luxury package including its own ccnx_sock
 
+    self.peetsClosure = PeetsMsgClosure(self.process_peets_msg)
+
   def fetch_peets_msg(self, name):
-    self.ccnx_sock.send_interest(Name(name), PeetsMsgClosure(self.process_peets_msg))
-    #self.ccnx_sock.send_interest(Name(name), TestClosure(self.process_peets_msg))
+    print "Fetching name: " + name
+
+    self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
 
   def process_peets_msg(self, interest, data):
     ''' Assume the interest for peets msg would have a name like this:
@@ -60,17 +62,21 @@ class Roster(FreshList):
       if msg.msg_type == PeetsMessage.Join:
         ru = RemoteUser(msg.msg_from, prefix, msg.audio_prefix, audio_rate_hint = msg.audio_rate_hint, audio_seq_hint = msg.audio_seq_hint)
         self.add(prefix, ru)
+        print "Invoking join callback"
         join_callback(ru)
       elif msg.msg_type == PeetsMessage.Hello:
         self.refresh_for(prefix)
+        print "Hello received"
       elif msg.msg_type == PeetsMessage.Leave:
         self.delete(prefix)
         ru = RemoteUser(msg.msg_from, prefix, msg.audio_prefix, audio_rate_hint = msg.audio_rate_hint, audio_seq_hint = msg.audio_seq_hint)
+        print "Invoking leave callback"
         leave_callback(ru)
       else:
+        print "dafaq"
         pass
     except KeyError as e:
-      Roster.__logger.error("PeetsMessage does not have type or from", e)
+      Roster.__logger.error("PeetsMessage does not have type or from" + e)
 
   def refresh_self(self):
     nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = self.local_user_info()
@@ -114,8 +120,10 @@ if __name__ == '__main__':
   print "------ Creating the second roster object ------"
   roster2 = Roster('/test/chat', join_callback, leave_callback, user_local_info_2)
 
-  sleep(5)
+  #sleep(1)
+  #roster2.refresh_self()
 
-  roster2.leave()
+  #sleep(1)
+  #roster2.leave()
 
-  sleep(5)
+

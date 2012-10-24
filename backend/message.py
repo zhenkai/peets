@@ -36,7 +36,7 @@ class PeetsMessage(object):
       else:
         return PeetsMessage(dct['msg_type'], dct['msg_from'], audio_prefix = dct.get('audio_prefix'), audio_rate_hint = dct.get('audio_rate_hint'), audio_seq_hint = dct.get('audio_seq_hint'))
 
-      return json.loads(str_msg, object_hook = as_message)
+    return json.loads(str_msg, object_hook = as_message)
 
 
 if __name__ == '__main__':

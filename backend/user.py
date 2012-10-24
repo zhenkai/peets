@@ -17,7 +17,6 @@ class User(object):
     self.nick = nick
     self.prefix = prefix
 
-    print "Init User: %s %s" % (self.nick, self.prefix)
 
   def get_nick(self):
     return self.nick
