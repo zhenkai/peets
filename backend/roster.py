@@ -22,6 +22,16 @@ class PeetsMsgClosure(Closure):
 
     return pyccn.RESULT_OK
 
+class TestClosure(Closure):
+  def __init__(self):
+    super(TestClosure, self).__init__()
+
+  def upcall(self, kind, upcallInfo):
+    if kind == pyccn.UPCALL_CONTENT:
+      print "Fetched data with name: " + str(upcallInfo.ContentObject.name)
+
+    return pyccn.RESULT_OK
+
 class Roster(FreshList):
   ''' Keep a roster for a hangout '''
   __logger = Logger.get_logger('Roster')
@@ -43,8 +53,11 @@ class Roster(FreshList):
     self.peetsClosure = PeetsMsgClosure(self.process_peets_msg)
 
   def fetch_peets_msg(self, name):
-    print "Fetching name: " + name
-    self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
+    #print "Fetching name: " + name
+    #self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
+    newname = '/'.join(name.split('/')[:-1]) + '/0'
+    print "Fetching name: " + newname
+    self.ccnx_sock.send_interest(Name(newname), TestClosure())
     
   def process_peets_msg(self, interest, data):
     ''' Assume the interest for peets msg would have a name like this:
@@ -82,7 +95,8 @@ class Roster(FreshList):
     msg_type = PeetsMessage.Hello if self.joined else PeetsMessage.Join
     msg = PeetsMessage(msg_type, nick, audio_prefix = audio_prefix, audio_rate_hint = audio_rate_hint, audio_seq_hint = audio_seq_hint)
     msg_str = msg.to_string()
-    self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
+    #self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
+    self.chronos_sock.publish_string(prefix, self.session, msg_str, 100)
     self.joined = True
 
   def leave(self):

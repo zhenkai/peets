@@ -72,7 +72,33 @@ if __name__ == '__main__':
 
       return pyccn.RESULT_OK
 
-  sock1.publish_content(name, content, 100)
+  sock1.publish_content(name, content, 200)
   sock2.send_interest(name, TestClosure())
   from time import sleep
-  sleep(2)
+  print "Fetching with interval 1 second for 2 times"
+  for i in xrange(2):
+    sleep(1)
+    sock2.send_interest(name, TestClosure())
+
+  print "Fetching with interval 2 second for 2 times"
+  for i in xrange(2):
+    sleep(2)
+    sock2.send_interest(name, TestClosure())
+
+  print "Fetching with interval 3 second for 2 times"
+  for i in xrange(2):
+    sleep(3)
+    sock2.send_interest(name, TestClosure())
+
+  print "Fetching with interval 4 second for 2 times"
+  for i in xrange(2):
+    sleep(4)
+    sock2.send_interest(name, TestClosure())
+
+  print "Fetching with interval 5 second for 2 times"
+  for i in xrange(2):
+    sleep(5)
+    sock2.send_interest(name, TestClosure())
+
+  sleep(1)
+  print "Stopped fetching process"
