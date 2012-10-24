@@ -1,6 +1,9 @@
 from time import time
-from threading import Timer, RLock
-from random import randint
+from datetime import datetime, timedelta
+from apscheduler.scheduler import Scheduler
+from triggers import RandomizedIntervalTrigger
+from random import uniform
+from threading import RLock
 from log import Logger
 
 class StateObject(object):
@@ -32,19 +35,22 @@ class FreshList(object):
     self.reap_callback = reap_callback
     # every operation to self.instances should grab self.__rlock first
     self.__rlock = RLock()
+    self.scheduler = Scheduler()
+    self.scheduler.start()
 
-    self.stopped = False
+    # schedule periodic reap 
+    reap_interval = FreshList.reap_interval
+    self.scheduler.add_job(RandomizedIntervalTrigger(timedelta(seconds = reap_interval), randomize = lambda: uniform(0, reap_interval / 4)), self.reap, None, None, **{})
 
-    # start reap 
-    interval = FreshList.reap_interval + randint(0, FreshList.reap_interval / 4)
-    self.schedule_next(interval, self.reap)
+    # schedule refresh self 
+    refresh_interval = 0.7 * StateObject.default_ttl
+    self.scheduler.add_job(RandomizedIntervalTrigger(timedelta(seconds = refresh_interval), randomize = lambda: uniform(0, refresh_interval / 4)), self.refresh_func, None, None, **{})
 
-    # start refresh self shortly
-    short_wait = 0.5 # seconds
-    self.schedule_next(short_wait, self.refresh)
+  def schedule_next(self, interval, func):
+    self.scheduler.add_date_job(func, datetime.now() + timedelta(seconds = interval))
 
-  def stop_timer(self):
-    self.stopped = True
+  def shutdown(self, wait = False):
+    self.scheduler.shutdown(wait = wait)
 
   def reap(self):
     self.__rlock.acquire()
@@ -53,10 +59,6 @@ class FreshList(object):
     self.__rlock.release()
     map(lambda(k, state_object): self.reap_callback(state_object), zombies)
     
-    # schedule the next reap
-    interval = FreshList.reap_interval + randint(0, FreshList.reap_interval / 4)
-    self.schedule_next(interval, self.reap)
-
   def refresh_for(self, k):
     self.__rlock.acquire()
     try:
@@ -85,14 +87,3 @@ class FreshList(object):
     finally:
       self.__rlock.release()
   
-  def refresh(self):
-    self.refresh_func()
-
-    interval = StateObject.default_ttl - randint(0, StateObject.default_ttl / 4)
-    self.schedule_next(interval, self.refresh)
-    
-  def schedule_next(self, interval, func):
-    if not self.stopped:
-      t = Timer(interval, func)
-      t.start()
-

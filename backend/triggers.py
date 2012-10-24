@@ -36,7 +36,7 @@ if __name__ == '__main__':
     #trigger = RandomizedIntervalTrigger(interval, randomize = lambda : uniform(seconds / 8, seconds / 4))
     trigger = RandomizedIntervalTrigger(interval)
 
-    sched.add_job(trigger, func, None, None, **{})
+    sched.add_job(trigger, func, None, None, **{} )
 
   wrap()
   from time import sleep

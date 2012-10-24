@@ -37,6 +37,8 @@ class Roster(FreshList):
     self.ccnx_sock = CcnxSocket()
     self.ccnx_sock.start()
     self.chronos_sock = SimpleChronosSocket(chatroom_prefix, self.fetch_peets_msg)
+    # send join after 0.5 second
+    self.schedule_next(0.5, self.refresh_self)
 
   def fetch_peets_msg(self, name):
     print "Fetching name: " + name
@@ -116,8 +118,8 @@ if __name__ == '__main__':
   roster2 = Roster('/test/chat', join_callback, leave_callback, user_local_info_2)
 
   sleep(10)
-  roster1.stop_timer()
-  roster2.stop_timer()
+#  roster1.shutdown()
+#  roster2.shutdown()
   print "------ main thread should exit now ------"
 
   #sleep(1)
