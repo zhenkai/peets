@@ -7,36 +7,43 @@ from chronos import SimpleChronosSocket
 from ccnxsocket import CcnxSocket
 from message import PeetsMessage
 from time import time, sleep
+from softstate import FreshList, StateObject
+
+class PeetsMsgClosure(Closure):
+  ''' A closure for processing PeetsMessage content object''' 
+  def __init__(self, msg_callback):
+    super(PeetsMsgClosure, self).__init__()
+    self.msg_callback = msg_callback
+    print "Initialized PeetsMsgClosure"
+
+  def upcall(self, kind, upcallInfo):
+    if kind == pyccn.UPCALL_CONTENT:
+      print upcallInfo.ContentObject.content
+      self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
+
+    return pyccn.RESULT_OK
 
 class Roster(FreshList):
   ''' Keep a roster for a hangout '''
   __logger = Logger.get_logger('Roster')
 
-  class PeetsMsgClosure(Closure):
-    ''' A closure for processing PeetsMessage content object''' 
-    def __init__(self, msg_callback, *args, **kwargs):
-      super(PeetsMsgClosure, self).__init__(*args, **kwargs)
-      self.msg_callback = msg_callback
-
-    def upcall(self, kind, upcallInfo):
-      if kind == pyccn.UPCALL_CONTENT:
-        self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
-
-      return pyccn.RESULT_OK
 
   def __init__(self, chatroom_prefix, join_callback, leave_callback, local_user_info, *args, **kwargs):
-    super(Roster, self).__init__(refresh_func, leave_callback, *args, **kwargs)
+    super(Roster, self).__init__(self.refresh_self, leave_callback, *args, **kwargs)
     self.join_callback = join_callback
     self.leave_callback = leave_callback
+    self.local_user_info = local_user_info
     self.joined = False
     self.session = int(time())
+    self.ccnx_sock = CcnxSocket()
+    self.ccnx_sock.start()
     self.chronos_sock = SimpleChronosSocket(chatroom_prefix, self.fetch_peets_msg)
     # probably it's also a good idea to pass in the ccnx_sock so that this class can share
     # a sock with others, but for now we're give it a luxury package including its own ccnx_sock
-    self.ccnx_sock = CcnxSocket()
 
   def fetch_peets_msg(self, name):
     self.ccnx_sock.send_interest(Name(name), PeetsMsgClosure(self.process_peets_msg))
+    #self.ccnx_sock.send_interest(Name(name), TestClosure(self.process_peets_msg))
 
   def process_peets_msg(self, interest, data):
     ''' Assume the interest for peets msg would have a name like this:
@@ -66,7 +73,7 @@ class Roster(FreshList):
       Roster.__logger.error("PeetsMessage does not have type or from", e)
 
   def refresh_self(self):
-    nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = local_user_info()
+    nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = self.local_user_info()
     msg_type = PeetsMessage.Hello if self.joined else PeetsMessage.Join
     msg = PeetsMessage(msg_type, nick, audio_prefix = audio_prefix, audio_rate_hint = audio_rate_hint, audio_seq_hint = audio_seq_hint)
     msg_str = msg.to_string()
@@ -74,7 +81,7 @@ class Roster(FreshList):
     self.joined = True
 
   def leave(self):
-    nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = local_user_info()
+    nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = self.local_user_info()
     msg = PeetsMessage(PeetsMessage.Leave, nick)
     msg_str = msg.to_string()
     self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
@@ -101,7 +108,10 @@ if __name__ == '__main__':
   def user_local_info_2():
     return ('jerry', '/jerry', '/jerry/audio', None, None)
 
+  print "------ Creating the first roster object ------"
   roster1 = Roster('/test/chat', join_callback, leave_callback, user_local_info_1)
+  sleep(2)
+  print "------ Creating the second roster object ------"
   roster2 = Roster('/test/chat', join_callback, leave_callback, user_local_info_2)
 
   sleep(5)
