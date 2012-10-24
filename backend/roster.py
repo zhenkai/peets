@@ -22,20 +22,9 @@ class PeetsMsgClosure(Closure):
 
     return pyccn.RESULT_OK
 
-class TestClosure(Closure):
-  def __init__(self):
-    super(TestClosure, self).__init__()
-
-  def upcall(self, kind, upcallInfo):
-    if kind == pyccn.UPCALL_CONTENT:
-      print "Fetched data with name: " + str(upcallInfo.ContentObject.name)
-
-    return pyccn.RESULT_OK
-
 class Roster(FreshList):
   ''' Keep a roster for a hangout '''
   __logger = Logger.get_logger('Roster')
-
 
   def __init__(self, chatroom_prefix, join_callback, leave_callback, local_user_info, *args, **kwargs):
     super(Roster, self).__init__(self.refresh_self, leave_callback, *args, **kwargs)
@@ -44,20 +33,14 @@ class Roster(FreshList):
     self.local_user_info = local_user_info
     self.joined = False
     self.session = int(time())
+    self.peetsClosure = PeetsMsgClosure(self.process_peets_msg)
     self.ccnx_sock = CcnxSocket()
     self.ccnx_sock.start()
     self.chronos_sock = SimpleChronosSocket(chatroom_prefix, self.fetch_peets_msg)
-    # probably it's also a good idea to pass in the ccnx_sock so that this class can share
-    # a sock with others, but for now we're give it a luxury package including its own ccnx_sock
-
-    self.peetsClosure = PeetsMsgClosure(self.process_peets_msg)
 
   def fetch_peets_msg(self, name):
-    #print "Fetching name: " + name
-    #self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
-    newname = '/'.join(name.split('/')[:-1]) + '/0'
-    print "Fetching name: " + newname
-    self.ccnx_sock.send_interest(Name(newname), TestClosure())
+    print "Fetching name: " + name
+    self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
     
   def process_peets_msg(self, interest, data):
     ''' Assume the interest for peets msg would have a name like this:
@@ -95,8 +78,7 @@ class Roster(FreshList):
     msg_type = PeetsMessage.Hello if self.joined else PeetsMessage.Join
     msg = PeetsMessage(msg_type, nick, audio_prefix = audio_prefix, audio_rate_hint = audio_rate_hint, audio_seq_hint = audio_seq_hint)
     msg_str = msg.to_string()
-    #self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
-    self.chronos_sock.publish_string(prefix, self.session, msg_str, 100)
+    self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
     self.joined = True
 
   def leave(self):
@@ -132,6 +114,11 @@ if __name__ == '__main__':
   sleep(2)
   print "------ Creating the second roster object ------"
   roster2 = Roster('/test/chat', join_callback, leave_callback, user_local_info_2)
+
+  sleep(10)
+  roster1.stop_timer()
+  roster2.stop_timer()
+  print "------ main thread should exit now ------"
 
   #sleep(1)
   #roster2.refresh_self()

@@ -33,6 +33,8 @@ class FreshList(object):
     # every operation to self.instances should grab self.__rlock first
     self.__rlock = RLock()
 
+    self.stopped = False
+
     # start reap 
     interval = FreshList.reap_interval + randint(0, FreshList.reap_interval / 4)
     self.schedule_next(interval, self.reap)
@@ -41,6 +43,8 @@ class FreshList(object):
     short_wait = 0.5 # seconds
     self.schedule_next(short_wait, self.refresh)
 
+  def stop_timer(self):
+    self.stopped = True
 
   def reap(self):
     self.__rlock.acquire()
@@ -88,6 +92,7 @@ class FreshList(object):
     self.schedule_next(interval, self.refresh)
     
   def schedule_next(self, interval, func):
-    t = Timer(interval, func)
-    t.start()
+    if not self.stopped:
+      t = Timer(interval, func)
+      t.start()
 
