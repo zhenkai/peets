@@ -1,8 +1,37 @@
 from pyccn import Closure, CCN, Interest, Name, EventLoop, ContentObject
-from pyccn._pyccn import CCNError
 import pyccn
 from thread import start_new_thread
-from log import Logger
+import select
+#from log import Logger
+
+class PollLoop(object):
+  def __init__(self, handle, *args, **kwargs):
+    super(PollLoop, self).__init__()
+    self.handle = handle
+    self.running = False
+
+  def run(self):
+    self.running = True
+    # select.poll() is disabled in Mac OS X.. dafaq?!
+    #poller = select.poll()
+    #poller.register(self.handle.fileno(), select.POLLIN | select.POLLOUT)
+    inputs = [self.handle]
+    while (self.running):
+      self.handle.run(0)
+      outputs = []
+      if self.handle.output_is_pending():
+        outputs.append(fd)
+
+      # this is a hack of pyccn. it uses internal method
+      # defined in ccn_private.h.. maybe it's not a good idea
+      timeout = min(self.handle.process_scheduled(), 20)
+      # time out is in seconds
+      select.select(inputs, [], [], 2)
+      #select.select(inputs, outpus, [], 2000)
+
+  def stop(self):
+    self.running = False
+  
 
 class CcnxSocket(object):
   ''' A socket like handler for ccnx operations.
@@ -12,14 +41,14 @@ class CcnxSocket(object):
       but there is no such need as of now.
   '''
 
-  __logger = Logger.get_logger('CcnxSocket')
+#  __logger = Logger.get_logger('CcnxSocket')
 
   def __init__(self, *args, **kwargs):
     super(CcnxSocket, self).__init__()
     self.ccnx_key = CCN.getDefaultKey()
     self.ccnx_key_locator = pyccn.KeyLocator(self.ccnx_key)
     self.ccnx_handle = CCN() 
-    self.event_loop = EventLoop(self.ccnx_handle)
+    self.event_loop = PollLoop(self.ccnx_handle)
 
   def get_signed_info(self, freshness):
     si = pyccn.SignedInfo()
@@ -59,46 +88,48 @@ if __name__ == '__main__':
   sock1.start()
   sock2.start()
 
-  name = Name('/local/test')
-  content = 'Hello, world!'
+  name1 = Name('/local/test1')
+  content1 = 'Hello, world! 1'
+  name2 = Name('/local/test2')
+  content2 = 'Hello, world! 2'
+  name3 = Name('/local/test3')
+  content3 = 'Hello, world! 3'
 
   class TestClosure(Closure):
     def __init__(self):
       super(TestClosure, self).__init__()
 
     def upcall(self, kind, upcallInfo):
+      print "In upcall, kind = " + str(kind)
       if kind == pyccn.UPCALL_CONTENT:
         print upcallInfo.ContentObject.content
 
       return pyccn.RESULT_OK
 
-  sock1.publish_content(name, content, 200)
-  sock2.send_interest(name, TestClosure())
   from time import sleep
-  print "Fetching with interval 1 second for 2 times"
-  for i in xrange(2):
-    sleep(1)
-    sock2.send_interest(name, TestClosure())
 
-  print "Fetching with interval 2 second for 2 times"
-  for i in xrange(2):
-    sleep(2)
-    sock2.send_interest(name, TestClosure())
+  sock1.publish_content(name1, content1, 200)
+  sleep(1)
+  sock1.publish_content(name2, content2, 200)
+  sleep(1)
+  sock1.publish_content(name3, content3, 200)
+  sleep(1)
 
-  print "Fetching with interval 3 second for 2 times"
-  for i in xrange(2):
-    sleep(3)
-    sock2.send_interest(name, TestClosure())
+ # for i in range(10)[1:]:
+ #   print "---- i = " + str(i) + ", sending two interests with interval " + str(i) + " seconds ----"
+ #   sock2.send_interest(name, TestClosure())
+ #   sleep(i)
+ #   sock2.send_interest(name, TestClosure())
+ #   sleep(i)
 
-  print "Fetching with interval 4 second for 2 times"
-  for i in xrange(2):
-    sleep(4)
-    sock2.send_interest(name, TestClosure())
+  print "---- sending interests seconds ----"
+  sock2.send_interest(name1, TestClosure())
+  sleep(5)
+  print "---- sending interests seconds ----"
+  sock2.send_interest(name2, TestClosure())
 
-  print "Fetching with interval 5 second for 2 times"
-  for i in xrange(2):
-    sleep(5)
-    sock2.send_interest(name, TestClosure())
-
+  sleep(5)
+  print "---- sending interests seconds ----"
+  sock2.send_interest(name3, TestClosure())
   sleep(1)
   print "Stopped fetching process"
