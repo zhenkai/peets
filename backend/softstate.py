@@ -6,8 +6,8 @@ from log import Logger
 class StateObject(object):
   ''' store the information of a soft-state object'''
 
-#  default_ttl = 60
-  default_ttl = 5
+  default_ttl = 60
+#  default_ttl = 5
 
   def __init__(self, *args, **kwargs):
     super(StateObject, self).__init__()
@@ -58,7 +58,7 @@ class FreshList(object):
     try:
       self.instances[k].refresh_timestamp()
     except KeyError as e:
-      FreshList._logger.error("Try to refresh non-exist state object", e)
+      FreshList._logger.exception("Try to refresh non-exist state object")
       raise e
     finally:
       self.__rlock.release()
@@ -76,7 +76,7 @@ class FreshList(object):
     try:
       del self.instances[k]
     except KeyError as e:
-      FreshList._logger.error("Try to del non-exist state object", e)
+      FreshList._logger.exception("Try to del non-exist state object")
       raise e
     finally:
       self.__rlock.release()

@@ -44,9 +44,8 @@ class Roster(FreshList):
 
   def fetch_peets_msg(self, name):
     print "Fetching name: " + name
-
     self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
-
+    
   def process_peets_msg(self, interest, data):
     ''' Assume the interest for peets msg would have a name like this:
     /user-data-prefix/peets_msg/session/seq
@@ -76,7 +75,7 @@ class Roster(FreshList):
         print "dafaq"
         pass
     except KeyError as e:
-      Roster.__logger.error("PeetsMessage does not have type or from" + e)
+      Roster.__logger.exception("PeetsMessage does not have type or from")
 
   def refresh_self(self):
     nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = self.local_user_info()
@@ -109,10 +108,10 @@ if __name__ == '__main__':
     print 'User %s left' % ru.nick
 
   def user_local_info_1():
-    return ('tom', '/tom', '/tom/audio', None, None)
+    return ('tom', '/roster/tom', '/roster/tom/audio', None, None)
 
   def user_local_info_2():
-    return ('jerry', '/jerry', '/jerry/audio', None, None)
+    return ('jerry', '/roster/jerry', '/roster/jerry/audio', None, None)
 
   print "------ Creating the first roster object ------"
   roster1 = Roster('/test/chat', join_callback, leave_callback, user_local_info_1)
