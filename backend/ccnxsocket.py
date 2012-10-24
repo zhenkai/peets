@@ -2,11 +2,11 @@ from pyccn import Closure, CCN, Interest, Name, EventLoop, ContentObject
 import pyccn
 from thread import start_new_thread
 import select
-#from log import Logger
+from log import Logger
 
-class PollLoop(object):
+class CcnxLoop(object):
   def __init__(self, handle, *args, **kwargs):
-    super(PollLoop, self).__init__()
+    super(CcnxLoop, self).__init__()
     self.handle = handle
     self.running = False
 
@@ -22,12 +22,8 @@ class PollLoop(object):
       if self.handle.output_is_pending():
         outputs.append(fd)
 
-      # this is a hack of pyccn. it uses internal method
-      # defined in ccn_private.h.. maybe it's not a good idea
-      timeout = min(self.handle.process_scheduled(), 20)
       # time out is in seconds
-      select.select(inputs, [], [], 2)
-      #select.select(inputs, outpus, [], 2000)
+      select.select(inputs, outputs, [], 0.05)
 
   def stop(self):
     self.running = False
@@ -41,14 +37,14 @@ class CcnxSocket(object):
       but there is no such need as of now.
   '''
 
-#  __logger = Logger.get_logger('CcnxSocket')
+  __logger = Logger.get_logger('CcnxSocket')
 
   def __init__(self, *args, **kwargs):
     super(CcnxSocket, self).__init__()
     self.ccnx_key = CCN.getDefaultKey()
     self.ccnx_key_locator = pyccn.KeyLocator(self.ccnx_key)
     self.ccnx_handle = CCN() 
-    self.event_loop = PollLoop(self.ccnx_handle)
+    self.event_loop = CcnxLoop(self.ccnx_handle)
 
   def get_signed_info(self, freshness):
     si = pyccn.SignedInfo()
@@ -88,12 +84,8 @@ if __name__ == '__main__':
   sock1.start()
   sock2.start()
 
-  name1 = Name('/local/test1')
-  content1 = 'Hello, world! 1'
-  name2 = Name('/local/test2')
-  content2 = 'Hello, world! 2'
-  name3 = Name('/local/test3')
-  content3 = 'Hello, world! 3'
+  name = Name('/local/test1')
+  content = 'Hello, world!'
 
   class TestClosure(Closure):
     def __init__(self):
@@ -108,28 +100,13 @@ if __name__ == '__main__':
 
   from time import sleep
 
-  sock1.publish_content(name1, content1, 200)
-  sleep(1)
-  sock1.publish_content(name2, content2, 200)
-  sleep(1)
-  sock1.publish_content(name3, content3, 200)
-  sleep(1)
+  sock1.publish_content(name, content, 200)
 
- # for i in range(10)[1:]:
- #   print "---- i = " + str(i) + ", sending two interests with interval " + str(i) + " seconds ----"
- #   sock2.send_interest(name, TestClosure())
- #   sleep(i)
- #   sock2.send_interest(name, TestClosure())
- #   sleep(i)
+  for i in range(10)[1:]:
+    print "---- i = " + str(i) + ", sending two interests with interval " + str(i) + " seconds ----"
+    sock2.send_interest(name, TestClosure())
+    sleep(i)
+    sock2.send_interest(name, TestClosure())
+    sleep(i)
 
-  print "---- sending interests seconds ----"
-  sock2.send_interest(name1, TestClosure())
-  sleep(5)
-  print "---- sending interests seconds ----"
-  sock2.send_interest(name2, TestClosure())
-
-  sleep(5)
-  print "---- sending interests seconds ----"
-  sock2.send_interest(name3, TestClosure())
-  sleep(1)
   print "Stopped fetching process"
