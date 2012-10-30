@@ -118,8 +118,8 @@ if __name__ == '__main__':
   roster2 = Roster('/test/chat', join_callback, leave_callback, user_local_info_2)
 
   sleep(10)
-#  roster1.shutdown()
-#  roster2.shutdown()
+  roster1.shutdown()
+  sleep(20)
   print "------ main thread should exit now ------"
 
   #sleep(1)
