@@ -10,9 +10,9 @@ class PeetsMessage(object):
     super(PeetsMessage, self).__init__()
     self.msg_type = msg_type
     self.msg_from = msg_from
-    self.audio_prefix = kwargs.get('audio_prefix', None)
-    self.audio_rate_hint = kwargs.get('audio_rate_hint', None)
-    self.audio_seq_hint = kwargs.get('audio_seq_hint', None)
+    self.audio_prefix = kwargs.get('audio_prefix')
+    self.audio_rate_hint = kwargs.get('audio_rate_hint')
+    self.audio_seq_hint = kwargs.get('audio_seq_hint')
 
   def to_string(self):
     class PeetsMessageEncoder(json.JSONEncoder):
@@ -64,19 +64,23 @@ class RTCData(object):
   '''
   def __init__(self, *args, **kwargs):
     super(RTCData, self).__init__()
-    if kwargs.get('sdp', None):
+    if kwargs.get('sdp') is not None:
       self.sdp == kwargs.get('sdp')
-    if kwargs.get('socketId', None):
+    if kwargs.get('socketId') is not None:
       self.socketId = kwargs.get('socketId')
     # we store the stringified version of candidate in data, as the stringify method for Candidate is a little different
-    if kwargs.get('candidate', None):
+    if kwargs.get('candidate') is not None:
       self.candidate = kwargs.get('candidate')
-    if kwargs.get('room', None):
+    if kwargs.get('room') is not None:
       self.room = kwargs.get('room')
-    if kwargs.get('connections', None):
+    if kwargs.get('connections') is not None:
       self.connections = kwargs.get('connections')
-    if kwargs.get('label', None):
+    if kwargs.get('label') is not None:
       self.label = kwargs.get('label')
+    if kwargs.get('color') is not None:
+      self.color = kwargs.get('color')
+    if kwargs.get('messages') is not None:
+      self.color = kwargs.get('messages')
 
   def to_string(self):
     class RTCDataEncoder(json.JSONEncoder):
@@ -136,4 +140,6 @@ if __name__ == '__main__':
     mm = RTCMessage.from_string(m.to_string())
     print mm.to_string()
 
+    d = RTCData(connections = [])
+    print d.to_string()
     

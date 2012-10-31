@@ -1,12 +1,10 @@
 import logging
-import threading
 import os
 
 class Logger(object):
   ''' A global logging facility for peets backend '''
 
   __filename = '/tmp/peets/backend.log'
-  __lock = threading.Lock()
 
   dir_name = os.path.dirname(__filename)
   if not os.path.exists(dir_name):
@@ -15,6 +13,7 @@ class Logger(object):
   @staticmethod
   def get_logger(name, filename = __filename):
     logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - [%(name)s] - %(levelname)s'\
                                   + ' - %(message)s')
@@ -25,7 +24,13 @@ class Logger(object):
     # write to stdout
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
-    ch.setLevel(logging.DEBUG)
     logger.addHandler(ch)
     return logger
     
+
+
+if __name__ == '__main__':
+  logger = Logger.get_logger('RandomTest')
+  logger.debug("hello")
+  logger.info("world")
+
