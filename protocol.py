@@ -31,6 +31,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
 
   @logging
   def onMessage(self, msg, binary):
+    print "Message is", msg
     self.factory.process(self, msg)
 
   def onClose(self, wasClean, code, reason):
@@ -55,7 +56,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     # super can only work with new style classes which inherits from object
     # apparently WebSocketServerFactory is old style class
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
-    self.handlers = {'join_room' : self.handle_join, 'send_ice_candidate' : self.handle_ice_candidate, 'send_offer' : self.handle_offer, 'send_answer' : self.handle_answer}
+    self.handlers = {'join_room' : self.handle_join, 'send_ice_candidate' : self.handle_ice_candidate, 'send_offer' : self.handle_offer, 'send_answer' : self.handle_answer, 'chat_msg': self.handle_chat}
     self.clients = []
 
   def unregister(self, client):
@@ -117,6 +118,7 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   def broadcast(self, client, msg):
     str_msg = msg.to_string()
+    print "Broadcasting to ", self.clients
     for c in self.clients:
       if c is not client:
         c.sendMessage(str_msg)
