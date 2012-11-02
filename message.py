@@ -80,7 +80,7 @@ class RTCData(object):
     if kwargs.get('color') is not None:
       self.color = kwargs.get('color')
     if kwargs.get('messages') is not None:
-      self.color = kwargs.get('messages')
+      self.messages = kwargs.get('messages')
 
   def to_string(self):
     class RTCDataEncoder(json.JSONEncoder):
@@ -133,6 +133,9 @@ if __name__ == '__main__':
 
     dd = RTCData.from_string(d.to_string())
     print dd.to_string()
+
+    empty_room = RTCData(messages = "hello, world", room = "")
+    print empty_room.to_string()
 
     m = RTCMessage('new candidate', d)
     print m.to_string()
