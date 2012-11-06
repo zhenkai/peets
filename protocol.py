@@ -27,7 +27,6 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     lst = map(lambda x: random.choice(string.ascii_letters + string.digits), range(16))
     self.id = ''.join(lst)
     self.media_port = None
-    self.listen_port = None
     self.ip = None
   
   def onOpen(self):
@@ -62,7 +61,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
     self.handlers = {'join_room' : self.handle_join, 'send_ice_candidate' : self.handle_ice_candidate, 'send_offer' : self.handle_offer, 'send_answer' : self.handle_answer, 'chat_msg': self.handle_chat}
     self.clients = []
-    self.listen_port = 9001
+    self.listen_port = 9003
 
   def unregister(self, client):
     if client in self.clients:
@@ -109,12 +108,8 @@ class PeetsServerFactory(WebSocketServerFactory):
     if client.media_port is None:
       client.media_port = int(candidate.port)
       client.ip = candidate.ip
-
-    if client.listen_port is None:
-      self.listen_port = self.listen_port + 1
-      client.listen_port = self.listen_port
       
-    candidate = Candidate(('127.0.0.1', str(client.listen_port)))
+    candidate = Candidate(('127.0.0.1', str(self.listen_port)))
     d = RTCData(label = data.label, candidate = str(candidate), socketId = client.id)
     msg = RTCMessage('receive_ice_candidate', d)
     
