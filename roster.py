@@ -4,23 +4,12 @@ from pyccn._pyccn import CCNError
 import pyccn
 from log import Logger
 from chronos import SimpleChronosSocket
-from ccnxsocket import CcnxSocket
+from ccnxsocket import CcnxSocket, PeetsClosure
 from message import PeetsMessage
 from time import time, sleep
 from softstate import FreshList, StateObject
 
-class PeetsMsgClosure(Closure):
-  ''' A closure for processing PeetsMessage content object''' 
-  def __init__(self, msg_callback):
-    super(PeetsMsgClosure, self).__init__()
-    self.msg_callback = msg_callback
 
-  def upcall(self, kind, upcallInfo):
-    if kind == pyccn.UPCALL_CONTENT:
-      print "Fetched data with name: " + str(upcallInfo.ContentObject.name)
-      self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
-
-    return pyccn.RESULT_OK
 
 class Roster(FreshList):
   ''' Keep a roster for a hangout '''
@@ -33,7 +22,7 @@ class Roster(FreshList):
     self.local_user_info = local_user_info
     self.joined = False
     self.session = int(time())
-    self.peetsClosure = PeetsMsgClosure(self.process_peets_msg)
+    self.peetsClosure = PeetsClosure(self.process_peets_msg)
     self.ccnx_sock = CcnxSocket()
     self.ccnx_sock.start()
     self.chronos_sock = SimpleChronosSocket(chatroom_prefix, self.fetch_peets_msg)

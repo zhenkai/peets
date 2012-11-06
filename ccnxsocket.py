@@ -77,6 +77,18 @@ class CcnxSocket(object):
   def stop(self):
     self.event_loop.stop()
 
+class PeetsClosure(Closure):
+  ''' A closure for processing PeetsMessage content object''' 
+  def __init__(self, msg_callback):
+    super(PeetsClosure, self).__init__()
+    self.msg_callback = msg_callback
+
+  def upcall(self, kind, upcallInfo):
+    if kind == pyccn.UPCALL_CONTENT:
+      print "Fetched data with name: " + str(upcallInfo.ContentObject.name)
+      self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
+
+    return pyccn.RESULT_OK
 
 if __name__ == '__main__':
   sock1 = CcnxSocket()

@@ -3,6 +3,9 @@ from twisted.internet.protocol import DatagramProtocol
 from message import RTCMessage, RTCData, Candidate
 from log import Logger
 import random, string
+from ccnxsocket import CcnxSocket, PeetsClosure
+from pyccn import Name
+from apscheduler.scheduler import Scheduler
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -28,6 +31,9 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     self.id = ''.join(lst)
     self.media_port = None
     self.ip = None
+    self.seq = 0
+    self.known_seq = -1
+    self.sent_seq = 0
   
   def onOpen(self):
     pass
@@ -142,13 +148,45 @@ class PeetsUDP(DatagramProtocol):
   '''
   def __init__(self, factory):
     self.factory = factory
+    self.ccnx_socket = CcnxSocket()
+    self.ccnx_socket.start()
+    self.closure = PeetsClosure(self.media_callback)
+    self.scheduler = Scheduler()
+    self.scheduler.start()
+    self.scheduler.add_interval_job(self.fetch_media, seconds = 0.01)
     
   def datagramReceived(self, data, (host, port)):
-    print 'data received: ', host, port
     clients = self.factory.clients
     for c in clients:
-      if c.media_port != port:
-        self.transport.write(data, (c.ip, c.media_port))
-        print 'sent data to: ', c.ip, c.media_port
+      if c.media_port == port:
+        name = '/local/test/' + c.id + '/' + str(c.seq)
+        c.seq = c.seq + 1
+        self.ccnx_socket.publish_content(name, data)
+        print 'publish content', name
+
+  def media_callback(self, interest, data):
+    name = data.name
+    content = data.content
+    cid, seq = str(name).split('/')[-2:]
+    clients = self.factory.clients
+    for c in clients:
+      if c.id != cid:
+        self.transport.write(content, (c.ip, c.media_port))
+      else:
+        c.known_seq = int(seq)
+
+  def fetch_media(self):
+    clients = self.factory.clients
+    for c in clients:
+      if c.sent_seq - c.known_seq < 100:
+        name = '/local/test/' + c.id + '/' + str(c.sent_seq)
+        c.sent_seq = c.sent_seq + 1
+        self.ccnx_socket.send_interest(Name(name), self.closure)
+
+
+if __name__ == '__main__':
+  protocol = PeetsUDP(None)
+          
+    
     
 
