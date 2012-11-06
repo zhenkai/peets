@@ -1,4 +1,5 @@
 from autobahn.websocket import WebSocketServerProtocol, WebSocketServerFactory
+from twisted.internet.protocol import DatagramProtocol
 from message import RTCMessage, RTCData, Candidate
 from log import Logger
 import random, string
@@ -25,6 +26,9 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     #WebSocketServerProtocol.__init__(self, *args, **kwargs)
     lst = map(lambda x: random.choice(string.ascii_letters + string.digits), range(16))
     self.id = ''.join(lst)
+    self.media_port = None
+    self.listen_port = None
+    self.ip = None
   
   def onOpen(self):
     pass
@@ -58,6 +62,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
     self.handlers = {'join_room' : self.handle_join, 'send_ice_candidate' : self.handle_ice_candidate, 'send_offer' : self.handle_offer, 'send_answer' : self.handle_answer, 'chat_msg': self.handle_chat}
     self.clients = []
+    self.listen_port = 9001
 
   def unregister(self, client):
     if client in self.clients:
@@ -98,8 +103,21 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.broadcast(client, msg)
 
   def handle_ice_candidate(self, client, data):
-    d = RTCData(label = data.label, candidate = data.candidate, socketId = client.id)
+    #d = RTCData(label = data.label, candidate = data.candidate, socketId = client.id)
+    #msg = RTCMessage('receive_ice_candidate', d)
+    candidate = Candidate.from_string(data.candidate)
+    if client.media_port is None:
+      client.media_port = int(candidate.port)
+      client.ip = candidate.ip
+
+    if client.listen_port is None:
+      self.listen_port = self.listen_port + 1
+      client.listen_port = self.listen_port
+      
+    candidate = Candidate(('127.0.0.1', str(client.listen_port)))
+    d = RTCData(label = data.label, candidate = str(candidate), socketId = client.id)
     msg = RTCMessage('receive_ice_candidate', d)
+    
     self.broadcast(client, msg)
 
   def handle_offer(self, client, data):
@@ -122,4 +140,20 @@ class PeetsServerFactory(WebSocketServerFactory):
     for c in self.clients:
       if c is not client:
         c.sendMessage(str_msg)
+
+
+class PeetsUDP(DatagramProtocol):
+  ''' A udp protocol to relay local udp traffic to NDN and remote NDN traffic to local udp
+  '''
+  def __init__(self, factory):
+    self.factory = factory
+    
+  def datagramReceived(self, data, (host, port)):
+    print 'data received: ', host, port
+    clients = self.factory.clients
+    for c in clients:
+      if c.media_port != port:
+        self.transport.write(data, (c.ip, c.media_port))
+        print 'sent data to: ', c.ip, c.media_port
+    
 
