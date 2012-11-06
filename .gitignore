@@ -3,3 +3,4 @@
 *.bk
 test.py
 *.DS_*
+*.so
