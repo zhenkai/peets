@@ -20,7 +20,7 @@ class CcnxLoop(object):
       self.handle.run(0)
       outputs = []
       if self.handle.output_is_pending():
-        outputs.append(fd)
+        outputs.append(self.handle)
 
       # time out is in seconds
       select.select(inputs, outputs, [], 0.05)
