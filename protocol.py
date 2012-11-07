@@ -162,7 +162,8 @@ class PeetsUDP(DatagramProtocol):
         name = '/local/test/' + c.id + '/' + str(c.seq)
         c.seq = c.seq + 1
         self.ccnx_socket.publish_content(name, data)
-        print 'publish content', name
+        if c.seq % 100 == 0:
+          print 'publish content', name
 
   def media_callback(self, interest, data):
     name = data.name
@@ -178,10 +179,13 @@ class PeetsUDP(DatagramProtocol):
   def fetch_media(self):
     clients = self.factory.clients
     for c in clients:
-      if c.sent_seq - c.known_seq < 100:
+      #if c.sent_seq - c.known_seq < 100:
+      if c.sent_seq < c.seq - 10:
         name = '/local/test/' + c.id + '/' + str(c.sent_seq)
-        c.sent_seq = c.sent_seq + 1
         self.ccnx_socket.send_interest(Name(name), self.closure)
+        c.sent_seq += 1
+        if c.sent_seq % 100 == 0:
+          print 'fetch content', name
 
 
 if __name__ == '__main__':
