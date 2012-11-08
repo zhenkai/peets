@@ -78,19 +78,25 @@ class CcnxSocket(object):
     self.event_loop.stop()
 
 class PeetsClosure(Closure):
-  ''' A closure for processing PeetsMessage content object''' 
-  def __init__(self, msg_callback):
+  ''' A closure for processing PeetsMessage content object
+  timeout_callback should return some ccnx upcall return value
+  '''
+  def __init__(self, msg_callback, timeout_callback = None):
     super(PeetsClosure, self).__init__()
     self.msg_callback = msg_callback
+    self.timeout_callback = timeout_callback
 
   def upcall(self, kind, upcallInfo):
     if kind == pyccn.UPCALL_CONTENT:
-      print "Fetched data with name: " + str(upcallInfo.ContentObject.name)
       self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
-
+    elif kind == pyccn.UPCALL_INTEREST_TIMED_OUT:
+      if self.timeout_callback is not None:
+        return self.timeout_callback(upcallInfo.Interest)
+      
     return pyccn.RESULT_OK
 
 if __name__ == '__main__':
+  from time import sleep, time
   sock1 = CcnxSocket()
   sock2 = CcnxSocket()
   sock1.start()
@@ -98,27 +104,61 @@ if __name__ == '__main__':
 
   name = Name('/local/test1')
   content = 'Hello, world!'
+  
 
   class TestClosure(Closure):
     def __init__(self):
       super(TestClosure, self).__init__()
-
+      self.requested_seq = 0
+      self.fetched_seq = 0
+      
     def upcall(self, kind, upcallInfo):
-      print "In upcall, kind = " + str(kind)
+#      print "In upcall, kind = " + str(kind)
       if kind == pyccn.UPCALL_CONTENT:
-        print upcallInfo.ContentObject.content
+        print 'Got %s: %s' % (upcallInfo.ContentObject.name, upcallInfo.ContentObject.content)
+        name = upcallInfo.ContentObject.name
+        seq = int (str(name).split('/')[-1])
+        self.fetched_seq = seq
+        
 
       return pyccn.RESULT_OK
 
-  from time import sleep
 
   sock1.publish_content(name, content, 200)
 
-  for i in range(10)[1:]:
-    print "---- i = " + str(i) + ", sending two interests with interval " + str(i) + " seconds ----"
-    sock2.send_interest(name, TestClosure())
-    sleep(i)
-    sock2.send_interest(name, TestClosure())
-    sleep(i)
+  import thread  
+  print 'start testing pre-fetching'
+  prefix = '/local/pre/fetch'
+  closure = TestClosure()
 
+  # Note that we use different socks for sending interest and publishing data
+  # this is because, if we use only one sock, the pending interests sent by this sock
+  # would not be satisfied by the content published later by this sock
+  # however, if the content is published earlier than the interest is sent, then
+  # using one sock has no problem
+  def fetch():
+    counter = 0
+    while True:
+      if closure.requested_seq - closure.fetched_seq < 5:
+        name = Name(prefix + '/' + str(counter))
+        closure.requested_seq = counter
+        counter += 1
+        sock2.send_interest(name, closure)
+        
+      sleep(0.1)
+
+  def publish():
+    counter = 0
+    while True:
+      name = Name(prefix + '/' + str(counter))
+      counter += 1
+      content = '%s' % time()
+      sock1.publish_content(name, content, 5)
+      sleep(0.2)
+
+  thread.start_new_thread(fetch, ())
+      
+  sleep(2.5)
+  publish()
+  
   print "Stopped fetching process"

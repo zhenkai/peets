@@ -4,7 +4,8 @@ from message import RTCMessage, RTCData, Candidate
 from log import Logger
 import random, string
 from ccnxsocket import CcnxSocket, PeetsClosure
-from pyccn import Name
+from pyccn import Name, Interest
+import pyccn
 from apscheduler.scheduler import Scheduler
 
 class PeetsServerProtocol(WebSocketServerProtocol):
@@ -14,6 +15,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
   '''
 
   __logger = Logger.get_logger('PeetsServerProtocol')
+  (Stopped, Probing, Streaming) = range(3)
 
   # a decorator method for logging. using decorator just for fun
   def logging(fn):
@@ -31,16 +33,24 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     self.id = ''.join(lst)
     self.media_port = None
     self.ip = None
-    self.seq = 0
-    self.known_seq = -1
-    self.sent_seq = 0
-  
+    self.local_seq = 0
+    self.requested_seq = 0
+    self.fetched_seq = 0
+    self.streaming_state = PeetsServerProtocol.Stopped
+    self.timeouts = 0
+
+  def reset(self):
+    self.requested_seq = 0
+    self.fetched_seq = 0
+    self.streaming_state = PeetsServerProtocol.Stopped
+    self.timeouts = 0
+    
   def onOpen(self):
     pass
 
-  @logging
+  #@logging
   def onMessage(self, msg, binary):
-    print "Message is", msg
+    #print "Message is", msg
     self.factory.process(self, msg)
 
   def onClose(self, wasClean, code, reason):
@@ -50,7 +60,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     WebSocketServerProtocol.connectionLost(self, reason)
     self.factory.unregister(self)
 
-  @logging
+  #@logging
   def sendMessage(self, msg, binary = False):
     WebSocketServerProtocol.sendMessage(self, msg, binary)
 
@@ -137,20 +147,30 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   def broadcast(self, client, msg):
     str_msg = msg.to_string()
-    print "Broadcasting to ", self.clients
+    #print "Broadcasting to ", self.clients
     for c in self.clients:
       if c is not client:
         c.sendMessage(str_msg)
 
 
-class PeetsUDP(DatagramProtocol):
-  ''' A udp protocol to relay local udp traffic to NDN and remote NDN traffic to local udp
+class PeetsTranslator(DatagramProtocol):
+  ''' A translator protocol to relay local udp traffic to NDN and remote NDN traffic to local udp
+  This class also implements the strategy for fetching remote data.
+  If the remote seq is unknown, use a short prefix without seq to probe;
+  otherwise use a naive leaking-bucket like method to fetch the remote data
   '''
-  def __init__(self, factory):
+  def __init__(self, factory, pipe_size):
     self.factory = factory
-    self.ccnx_socket = CcnxSocket()
-    self.ccnx_socket.start()
-    self.closure = PeetsClosure(self.media_callback)
+    self.pipe_size = pipe_size
+    self.factory = factory
+    # here we use two sockets, because the pending interests sent by a socket can not be satisified
+    # by the content published later by the same socket
+    self.ccnx_int_socket = CcnxSocket()
+    self.ccnx_int_socket.start()
+    self.ccnx_con_socket = CcnxSocket()
+    self.ccnx_con_socket.start()
+    self.stream_closure = PeetsClosure(self.stream_callback, self.stream_timeout_callback)
+    self.probe_closure = PeetsClosure(self.probe_callback, self.probe_timeout_callback)
     self.scheduler = Scheduler()
     self.scheduler.start()
     self.scheduler.add_interval_job(self.fetch_media, seconds = 0.01)
@@ -159,13 +179,11 @@ class PeetsUDP(DatagramProtocol):
     clients = self.factory.clients
     for c in clients:
       if c.media_port == port:
-        name = '/local/test/' + c.id + '/' + str(c.seq)
-        c.seq = c.seq + 1
-        self.ccnx_socket.publish_content(name, data)
-        if c.seq % 100 == 0:
-          print 'publish content', name
+        name = '/local/test/' + c.id + '/' + str(c.local_seq)
+        c.local_seq += 1
+        self.ccnx_con_socket.publish_content(name, data)
 
-  def media_callback(self, interest, data):
+  def stream_callback(self, interest, data):
     name = data.name
     content = data.content
     cid, seq = str(name).split('/')[-2:]
@@ -174,23 +192,71 @@ class PeetsUDP(DatagramProtocol):
       if c.id != cid:
         self.transport.write(content, (c.ip, c.media_port))
       else:
-        c.known_seq = int(seq)
+        c.fetched_seq = int(seq)
+        c.timeouts = 0
 
+  def probe_callback(self, interest, data):
+    name = data.name
+    content = data.content
+    cid, seq = str(name).split('/')[-2:]
+    #self.stream_callback(interest, data)
+    for c in self.factory.clients:
+      if c.id == cid:
+        print 'probed: ', str(name)
+        c.requested_seq = int(seq)
+        c.fetched_seq = int(seq)
+        c.timeouts = 0
+        c.streaming_state = PeetsServerProtocol.Streaming
+
+  def stream_timeout_callback(self, interest):
+    # do not reexpress for non-probing interest
+    name = interest.name
+    cid = str(name).split('/')[-2]
+    for c in self.factory.clients:
+      if c.id == cid:
+        c.timeouts += 1
+        if c.timeouts >= self.pipe_size:
+          #print self.pipe_size, 'consecutive timeouts', interest.name
+          c.reset()
+          
+    return pyccn.RESULT_OK
+
+  def probe_timeout_callback(self, interest):
+    print 'probing:', str(interest.name)
+    return pyccn.RESULT_REEXPRESS
+    
   def fetch_media(self):
     clients = self.factory.clients
+    if len(clients) < 2:
+      pass
+    
     for c in clients:
-      #if c.sent_seq - c.known_seq < 100:
-      if c.sent_seq < c.seq - 10:
-        name = '/local/test/' + c.id + '/' + str(c.sent_seq)
-        self.ccnx_socket.send_interest(Name(name), self.closure)
-        c.sent_seq += 1
-        if c.sent_seq % 100 == 0:
-          print 'fetch content', name
+      if c.streaming_state == PeetsServerProtocol.Stopped:
 
+        name = '/local/test/' + c.id
+
+        template = Interest(childSelector = 1)
+        self.ccnx_int_socket.send_interest(Name(name), self.probe_closure, template)
+        #print 'probing: ', name
+        c.streaming_state = PeetsServerProtocol.Probing
+        
+      elif c.streaming_state == PeetsServerProtocol.Streaming and c.requested_seq - c.fetched_seq < self.pipe_size:
+          name = '/local/test/' + c.id + '/' + str(c.requested_seq + 1)
+          c.requested_seq += 1
+          #print 'streaming: ', name
+          self.ccnx_int_socket.send_interest(Name(name), self.stream_closure)
+          if c.requested_seq % 100 == 0:
+            print 'c', c.id, 'c.requested_seq', c.requested_seq, 'c.local_seq', c.local_seq
+      else:
+        #print 'c.streaming_state', c.streaming_state
+        pass
 
 if __name__ == '__main__':
-  protocol = PeetsUDP(None)
-          
+  peets_factory = PeetsServerFactory("ws://localhost:8000")
+  peets_factory.protocol = PeetsServerProtocol
+  PeetsTranslator(peets_factory, 100)
+  from time import sleep
+  sleep(2)       
     
     
 
