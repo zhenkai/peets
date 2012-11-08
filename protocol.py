@@ -32,7 +32,8 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     #WebSocketServerProtocol.__init__(self, *args, **kwargs)
     lst = map(lambda x: random.choice(string.ascii_letters + string.digits), range(16))
     self.id = ''.join(lst)
-    self.media_ports = {}
+    self.media_sink_ports = {}
+    self.media_source_port = None
     self.ip = None
     self.local_seq = 0
     self.requested_seq = 0
@@ -120,9 +121,12 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   def handle_ice_candidate(self, client, data):
     candidate = Candidate.from_string(data.candidate)
-    if client.media_ports.get(data.socketId) is None:
-      client.media_ports[data.socketId] = int(candidate.port)
-      client.ip = candidate.ip
+    if client.media_sink_ports.get(data.socketId) is None:
+      client.media_sink_ports[data.socketId] = int(candidate.port)
+      if client.media_source_port is None:
+        client.media_source_port = int(candidate.port)
+      if client.ip is None:
+        client.ip = candidate.ip
       
     candidate = Candidate(('127.0.0.1', str(self.listen_port)))
     d = RTCData(label = data.label, candidate = str(candidate), socketId = client.id)
@@ -186,7 +190,7 @@ class PeetsTranslator(DatagramProtocol):
     clients = self.factory.clients
     for c in clients:
       # only publishes one copy of the video
-      if len(c.media_ports) > 0 and c.media_ports.values()[0] == port:
+      if c.media_source_port == port:
         name = '/local/test/' + c.id + '/' + str(c.local_seq)
         c.local_seq += 1
         self.ccnx_con_socket.publish_content(name, data)
@@ -197,9 +201,9 @@ class PeetsTranslator(DatagramProtocol):
     cid, seq = str(name).split('/')[-2:]
     clients = self.factory.clients
     for c in clients:
-      if c.id != cid and cid in c.media_ports:
-        print 'received from', cid, 'write to', c.media_ports[cid]
-        self.transport.write(content, (c.ip, c.media_ports[cid]))
+      if c.id != cid and cid in c.media_sink_ports:
+        print 'received from', cid, 'write to', c.media_sink_ports[cid]
+        self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
       else:
         c.fetched_seq = int(seq)
         c.timeouts = 0
@@ -254,7 +258,7 @@ class PeetsTranslator(DatagramProtocol):
           if c.requested_seq % 100 == 0:
             pass
             #print map(lambda c: c.id, clients)
-            print map(lambda c: c.media_ports, clients)
+            print map(lambda c: c.media_sink_ports, clients)
       else:
         #print 'c.streaming_state', c.streaming_state
         pass
