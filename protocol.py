@@ -7,6 +7,7 @@ from ccnxsocket import CcnxSocket, PeetsClosure
 from pyccn import Name, Interest
 import pyccn
 from apscheduler.scheduler import Scheduler
+import operator
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -31,7 +32,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     #WebSocketServerProtocol.__init__(self, *args, **kwargs)
     lst = map(lambda x: random.choice(string.ascii_letters + string.digits), range(16))
     self.id = ''.join(lst)
-    self.media_port = None
+    self.media_ports = {}
     self.ip = None
     self.local_seq = 0
     self.requested_seq = 0
@@ -118,28 +119,35 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.broadcast(client, msg)
 
   def handle_ice_candidate(self, client, data):
-    #d = RTCData(label = data.label, candidate = data.candidate, socketId = client.id)
-    #msg = RTCMessage('receive_ice_candidate', d)
     candidate = Candidate.from_string(data.candidate)
-    if client.media_port is None:
-      client.media_port = int(candidate.port)
+    if client.media_ports.get(data.socketId) is None:
+      client.media_ports[data.socketId] = int(candidate.port)
       client.ip = candidate.ip
       
     candidate = Candidate(('127.0.0.1', str(self.listen_port)))
     d = RTCData(label = data.label, candidate = str(candidate), socketId = client.id)
     msg = RTCMessage('receive_ice_candidate', d)
     
-    self.broadcast(client, msg)
+    #self.broadcast(client, msg)
+    for c in self.clients:
+      if c.id == data.socketId:
+        c.sendMessage(msg.to_string())
 
   def handle_offer(self, client, data):
     d = RTCData(sdp = data.sdp, socketId = client.id)
     msg = RTCMessage('receive_offer', d)
-    self.broadcast(client, msg)
+    #self.broadcast(client, msg)
+    for c in self.clients:
+      if c.id == data.socketId:
+        c.sendMessage(msg.to_string())
 
   def handle_answer(self, client, data):
     d = RTCData(sdp = data.sdp, socketId = client.id)
     msg = RTCMessage('receive_answer', d)
-    self.broadcast(client, msg)
+    #self.broadcast(client, msg)
+    for c in self.clients:
+      if c.id == data.socketId:
+        c.sendMessage(msg.to_string())
 
   def handle_chat(self, client, data):
     msg = RTCMessage('receive_chat_msg', data)
@@ -147,7 +155,6 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   def broadcast(self, client, msg):
     str_msg = msg.to_string()
-    #print "Broadcasting to ", self.clients
     for c in self.clients:
       if c is not client:
         c.sendMessage(str_msg)
@@ -178,7 +185,8 @@ class PeetsTranslator(DatagramProtocol):
   def datagramReceived(self, data, (host, port)):
     clients = self.factory.clients
     for c in clients:
-      if c.media_port == port:
+      # only publishes one copy of the video
+      if len(c.media_ports) > 0 and c.media_ports.values()[0] == port:
         name = '/local/test/' + c.id + '/' + str(c.local_seq)
         c.local_seq += 1
         self.ccnx_con_socket.publish_content(name, data)
@@ -189,8 +197,9 @@ class PeetsTranslator(DatagramProtocol):
     cid, seq = str(name).split('/')[-2:]
     clients = self.factory.clients
     for c in clients:
-      if c.id != cid:
-        self.transport.write(content, (c.ip, c.media_port))
+      if c.id != cid and cid in c.media_ports:
+        print 'received from', cid, 'write to', c.media_ports[cid]
+        self.transport.write(content, (c.ip, c.media_ports[cid]))
       else:
         c.fetched_seq = int(seq)
         c.timeouts = 0
@@ -202,7 +211,6 @@ class PeetsTranslator(DatagramProtocol):
     #self.stream_callback(interest, data)
     for c in self.factory.clients:
       if c.id == cid:
-        print 'probed: ', str(name)
         c.requested_seq = int(seq)
         c.fetched_seq = int(seq)
         c.timeouts = 0
@@ -222,7 +230,6 @@ class PeetsTranslator(DatagramProtocol):
     return pyccn.RESULT_OK
 
   def probe_timeout_callback(self, interest):
-    print 'probing:', str(interest.name)
     return pyccn.RESULT_REEXPRESS
     
   def fetch_media(self):
@@ -237,7 +244,6 @@ class PeetsTranslator(DatagramProtocol):
 
         template = Interest(childSelector = 1)
         self.ccnx_int_socket.send_interest(Name(name), self.probe_closure, template)
-        #print 'probing: ', name
         c.streaming_state = PeetsServerProtocol.Probing
         
       elif c.streaming_state == PeetsServerProtocol.Streaming and c.requested_seq - c.fetched_seq < self.pipe_size:
@@ -246,7 +252,9 @@ class PeetsTranslator(DatagramProtocol):
           #print 'streaming: ', name
           self.ccnx_int_socket.send_interest(Name(name), self.stream_closure)
           if c.requested_seq % 100 == 0:
-            print 'c', c.id, 'c.requested_seq', c.requested_seq, 'c.local_seq', c.local_seq
+            pass
+            #print map(lambda c: c.id, clients)
+            print map(lambda c: c.media_ports, clients)
       else:
         #print 'c.streaming_state', c.streaming_state
         pass
