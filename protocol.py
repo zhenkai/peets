@@ -129,7 +129,7 @@ class PeetsServerFactory(WebSocketServerFactory):
         client.ip = candidate.ip
       
     candidate = Candidate(('127.0.0.1', str(self.listen_port)))
-    d = RTCData(label = data.label, candidate = str(candidate), socketId = client.id)
+    d = RTCData(candidate = str(candidate), socketId = client.id)
     msg = RTCMessage('receive_ice_candidate', d)
     
     #self.broadcast(client, msg)

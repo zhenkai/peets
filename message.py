@@ -75,8 +75,6 @@ class RTCData(object):
       self.room = kwargs.get('room')
     if kwargs.get('connections') is not None:
       self.connections = kwargs.get('connections')
-    if kwargs.get('label') is not None:
-      self.label = kwargs.get('label')
     if kwargs.get('color') is not None:
       self.color = kwargs.get('color')
     if kwargs.get('messages') is not None:
@@ -92,7 +90,7 @@ class RTCData(object):
   @classmethod
   def from_string(self, str_msg):
     def as_message(dct):
-      return RTCData(sdp = dct.get('sdp'), socketId = dct.get('socketId'), candidate = dct.get('candidate'), room = dct.get('room'), connections = dct.get('connections'), label = dct.get('label'))
+      return RTCData(sdp = dct.get('sdp'), socketId = dct.get('socketId'), candidate = dct.get('candidate'), room = dct.get('room'), connections = dct.get('connections'))
 
     return json.loads(str_msg, object_hook = as_message)
 
@@ -128,7 +126,7 @@ if __name__ == '__main__':
     c = Candidate.from_string(str(Candidate(('127.0.0.1', '62323'))))
     print c
     
-    d = RTCData(label = '0', candidate = str(c))
+    d = RTCData(candidate = str(c))
     print d.to_string()
 
     dd = RTCData.from_string(d.to_string())
