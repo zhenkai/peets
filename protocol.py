@@ -34,6 +34,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     self.id = ''.join(lst)
     self.media_sink_ports = {}
     self.media_source_port = None
+    self.media_source_sdp = None
     self.ip = None
     self.local_seq = 0
     self.requested_seq = 0
@@ -128,17 +129,19 @@ class PeetsServerFactory(WebSocketServerFactory):
       if client.ip is None:
         client.ip = candidate.ip
       
-    candidate = Candidate(('127.0.0.1', str(self.listen_port)))
-    d = RTCData(candidate = str(candidate), socketId = client.id)
-    msg = RTCMessage('receive_ice_candidate', d)
+      candidate = Candidate(('127.0.0.1', str(self.listen_port)))
+      d = RTCData(candidate = str(candidate), socketId = client.id)
+      msg = RTCMessage('receive_ice_candidate', d)
     
-    #self.broadcast(client, msg)
-    for c in self.clients:
-      if c.id == data.socketId:
-        c.sendMessage(msg.to_string())
+      for c in self.clients:
+        if c.id == data.socketId:
+          c.sendMessage(msg.to_string())
 
   def handle_offer(self, client, data):
-    d = RTCData(sdp = data.sdp, socketId = client.id)
+    if client.media_source_sdp is None:
+      client.media_source_sdp = data.sdp
+
+    d = RTCData(sdp = client.media_source_sdp, socketId = client.id)
     msg = RTCMessage('receive_offer', d)
     #self.broadcast(client, msg)
     for c in self.clients:
@@ -146,7 +149,9 @@ class PeetsServerFactory(WebSocketServerFactory):
         c.sendMessage(msg.to_string())
 
   def handle_answer(self, client, data):
-    d = RTCData(sdp = data.sdp, socketId = client.id)
+    if client.media_source_sdp is None:
+      client.media_source_sdp = data.sdp
+    d = RTCData(sdp = client.media_source_sdp, socketId = client.id)
     msg = RTCMessage('receive_answer', d)
     #self.broadcast(client, msg)
     for c in self.clients:
@@ -195,6 +200,10 @@ class PeetsTranslator(DatagramProtocol):
         c.local_seq += 1
         self.ccnx_con_socket.publish_content(name, data)
 
+      if port in c.media_sink_ports.values():
+        print 'udp received', c.id, host, port
+
+
   def stream_callback(self, interest, data):
     name = data.name
     content = data.content
@@ -202,7 +211,6 @@ class PeetsTranslator(DatagramProtocol):
     clients = self.factory.clients
     for c in clients:
       if c.id != cid and cid in c.media_sink_ports:
-        print 'received from', cid, 'write to', c.media_sink_ports[cid]
         self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
       else:
         c.fetched_seq = int(seq)
