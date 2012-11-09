@@ -46,7 +46,7 @@ class Roster(FreshList):
     try:
       msg = PeetsMessage.from_string(content)
       if msg.msg_type == PeetsMessage.Join:
-        ru = RemoteUser(msg.msg_from, prefix, msg.audio_prefix, audio_rate_hint = msg.audio_rate_hint, audio_seq_hint = msg.audio_seq_hint)
+        ru = RemoteUser(msg.msg_from, prefix, msg.audio_prefix)
         self.add(prefix, ru)
         print "Invoking join callback"
         join_callback(ru)
@@ -55,7 +55,7 @@ class Roster(FreshList):
         print "Hello received"
       elif msg.msg_type == PeetsMessage.Leave:
         self.delete(prefix)
-        ru = RemoteUser(msg.msg_from, prefix, msg.audio_prefix, audio_rate_hint = msg.audio_rate_hint, audio_seq_hint = msg.audio_seq_hint)
+        ru = RemoteUser(msg.msg_from, prefix, msg.audio_prefix)
         print "Invoking leave callback"
         leave_callback(ru)
       else:
@@ -65,15 +65,15 @@ class Roster(FreshList):
       Roster.__logger.exception("PeetsMessage does not have type or from")
 
   def refresh_self(self):
-    nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = self.local_user_info()
+    nick, prefix, audio_prefix = self.local_user_info()
     msg_type = PeetsMessage.Hello if self.joined else PeetsMessage.Join
-    msg = PeetsMessage(msg_type, nick, audio_prefix = audio_prefix, audio_rate_hint = audio_rate_hint, audio_seq_hint = audio_seq_hint)
+    msg = PeetsMessage(msg_type, nick, audio_prefix = audio_prefix)
     msg_str = msg.to_string()
     self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
     self.joined = True
 
   def leave(self):
-    nick, prefix, audio_prefix, audio_rate_hint, audio_seq_hint = self.local_user_info()
+    nick, prefix, audio_prefix = self.local_user_info()
     msg = PeetsMessage(PeetsMessage.Leave, nick)
     msg_str = msg.to_string()
     self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)

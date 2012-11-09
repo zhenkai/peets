@@ -29,8 +29,6 @@ class RemoteUser(User, StateObject):
   def __init__(self, nick, prefix, audio_prefix, *args, **kwargs):
     super(RemoteUser, self).__init__(nick, prefix, *args, **kwargs)
     self.audio_prefix = audio_prefix
-    self.audio_rate_hint = kwargs.get('audio_rate_hint', None)
-    self.audio_seq_hint = kwargs.get('audio_seq_hint', None)
 
   def get_prescence(self):
     if (self.is_active()):

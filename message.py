@@ -11,8 +11,6 @@ class PeetsMessage(object):
     self.msg_type = msg_type
     self.msg_from = msg_from
     self.audio_prefix = kwargs.get('audio_prefix')
-    self.audio_rate_hint = kwargs.get('audio_rate_hint')
-    self.audio_seq_hint = kwargs.get('audio_seq_hint')
 
   def to_string(self):
     class PeetsMessageEncoder(json.JSONEncoder):
@@ -34,7 +32,7 @@ class PeetsMessage(object):
       if dct['msg_type'] == PeetsMessage.Leave:
         return PeetsMessage(dct['msg_type'], dct['msg_from'])
       else:
-        return PeetsMessage(dct['msg_type'], dct['msg_from'], audio_prefix = dct.get('audio_prefix'), audio_rate_hint = dct.get('audio_rate_hint'), audio_seq_hint = dct.get('audio_seq_hint'))
+        return PeetsMessage(dct['msg_type'], dct['msg_from'], audio_prefix = dct.get('audio_prefix'))
 
     return json.loads(str_msg, object_hook = as_message)
 
@@ -111,7 +109,7 @@ class Candidate(object):
     
     
 if __name__ == '__main__':
-    msg = PeetsMessage(PeetsMessage.Hello, 'tester', audio_prefix = '/1/2/3', audio_rate_hint = 50, audio_seq_hint = 0)
+    msg = PeetsMessage(PeetsMessage.Hello, 'tester', audio_prefix = '/1/2/3')
     x =  msg.to_string()
     print x
     y = PeetsMessage.from_string(x)
