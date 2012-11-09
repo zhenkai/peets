@@ -68,14 +68,14 @@ class Roster(FreshList):
     nick, prefix, audio_prefix = self.local_user_info()
     msg_type = PeetsMessage.Hello if self.joined else PeetsMessage.Join
     msg = PeetsMessage(msg_type, nick, audio_prefix = audio_prefix)
-    msg_str = msg.to_string()
+    msg_str = str(msg)
     self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
     self.joined = True
 
   def leave(self):
     nick, prefix, audio_prefix = self.local_user_info()
     msg = PeetsMessage(PeetsMessage.Leave, nick)
-    msg_str = msg.to_string()
+    msg_str = str(msg)
     self.chronos_sock.publish_string(prefix, self.session, msg_str, StateObject.default_ttl)
     self.joined = False
 

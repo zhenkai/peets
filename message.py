@@ -1,40 +1,29 @@
 import json
 from log import Logger
+from user import User
 
 class PeetsMessage(object):
   ''' a message class that carries prescence and NDN related info of a participant
   '''
   Join, Hello, Leave = range(3)  
 
-  def __init__(self, msg_type, msg_from, *args, **kwargs):
+  def __init__(self, msg_type, user, msg_content, *args, **kwargs):
     super(PeetsMessage, self).__init__()
     self.msg_type = msg_type
-    self.msg_from = msg_from
-    self.audio_prefix = kwargs.get('audio_prefix')
+    self.user =  user
+    self.msg_content = msg_content
 
-  def to_string(self):
+  def __str__(self):
     class PeetsMessageEncoder(json.JSONEncoder):
       def default(self, obj):
-        if not isinstance(obj, PeetsMessage):
-          return super(PeetsMessageEncoder, self).default(obj)
-        
-        if (obj.msg_type == PeetsMessage.Leave):
-          return dict({'msg_type': obj.msg_type, 'msg_from': obj.msg_from})
-
         return obj.__dict__
     
     return json.dumps(self, cls = PeetsMessageEncoder)
 
   @classmethod
   def from_string(self, str_msg):
-
-    def as_message(dct):
-      if dct['msg_type'] == PeetsMessage.Leave:
-        return PeetsMessage(dct['msg_type'], dct['msg_from'])
-      else:
-        return PeetsMessage(dct['msg_type'], dct['msg_from'], audio_prefix = dct.get('audio_prefix'))
-
-    return json.loads(str_msg, object_hook = as_message)
+    dct = json.loads(str_msg)
+    return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')), RTCMessage(**dct.get('msg_content')))
 
 class RTCMessage(object):
   ''' a class that interacts with webrtc.io.js using their defined message
@@ -44,7 +33,7 @@ class RTCMessage(object):
     self.eventName = eventName
     self.data = data
 
-  def to_string(self):
+  def __str__(self):
     class RTCMessageEncoder(json.JSONEncoder):
       def default(self, obj):
         return obj.__dict__
@@ -78,7 +67,7 @@ class RTCData(object):
     if kwargs.get('messages') is not None:
       self.messages = kwargs.get('messages')
 
-  def to_string(self):
+  def __str__(self):
     class RTCDataEncoder(json.JSONEncoder):
       def default(self, obj):
         return obj.__dict__
@@ -109,41 +98,35 @@ class Candidate(object):
     
     
 if __name__ == '__main__':
-    msg = PeetsMessage(PeetsMessage.Hello, 'tester', audio_prefix = '/1/2/3')
-    x =  msg.to_string()
-    print x
-    y = PeetsMessage.from_string(x)
-    print y.to_string()
-
-    msg = PeetsMessage(PeetsMessage.Leave, 'tester')
-    x = msg.to_string()
-    print x
-    y = PeetsMessage.from_string(x)
-    print y.to_string()
-
     c = Candidate.from_string(str(Candidate(('127.0.0.1', '62323'))))
     print c
     
     d = RTCData(candidate = str(c))
-    print d.to_string()
+    print d
 
-    dd = RTCData.from_string(d.to_string())
-    print dd.to_string()
+    dd = RTCData.from_string(str(d))
+    print dd
 
     empty_room = RTCData(messages = "hello, world", room = "")
-    print empty_room.to_string()
+    print empty_room
 
     m = RTCMessage('new candidate', d)
-    print m.to_string()
+    print m
 
-    mm = RTCMessage.from_string(m.to_string())
-    print mm.to_string()
+    mm = RTCMessage.from_string(str(m))
+    print mm
 
     d = RTCData(connections = [])
-    print d.to_string()
+    print d
 
     str_msg = '{"socketId":"ufGE27a4p8xnXAEx","sdp":"v=0\r\no=- 1231441458 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE audio video\r\nm=audio 1 RTP/SAVPF 103 104 0 8 106 105 13 126\r\nc=IN IP4 0.0.0.0\r\na=rtcp:1 IN IP4 0.0.0.0\r\na=ice-ufrag:4JJeOjkTn3Pdi1JT\r\na=ice-pwd:R2W7uiQVJR+cFwoIEnpXg4FN\r\na=sendrecv\r\na=mid:audio\r\na=rtcp-mux\r\na=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:9Qx2eyCceVteTJSp+gN77PMe7Wdv0jLkX0rOD9ya\r\na=rtpmap:103 ISAC/16000\r\na=rtpmap:104 ISAC/32000\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:106 CN/32000\r\na=rtpmap:105 CN/16000\r\na=rtpmap:13 CN/8000\r\na=rtpmap:126 telephone-event/8000\r\na=ssrc:1849461185 cname:K3SOgLblDl9rwkwG\r\na=ssrc:1849461185 mslabel:IW3y3wkSByKDZXcf8FzgXk7a5wPfmYf3KxXM\r\na=ssrc:1849461185 label:IW3y3wkSByKDZXcf8FzgXk7a5wPfmYf3KxXM00\r\nm=video 1 RTP/SAVPF 100 101 102\r\nc=IN IP4 0.0.0.0\r\na=rtcp:1 IN IP4 0.0.0.0\r\na=ice-ufrag:4JJeOjkTn3Pdi1JT\r\na=ice-pwd:R2W7uiQVJR+cFwoIEnpXg4FN\r\na=sendrecv\r\na=mid:video\r\na=rtcp-mux\r\na=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:9Qx2eyCceVteTJSp+gN77PMe7Wdv0jLkX0rOD9ya\r\na=rtpmap:100 VP8/90000\r\na=rtpmap:101 red/90000\r\na=rtpmap:102 ulpfec/90000\r\na=ssrc:2046667548 cname:K3SOgLblDl9rwkwG\r\na=ssrc:2046667548 mslabel:IW3y3wkSByKDZXcf8FzgXk7a5wPfmYf3KxXM\r\na=ssrc:2046667548 label:IW3y3wkSByKDZXcf8FzgXk7a5wPfmYf3KxXM10\r\n"}'.replace('\r\n', '\\r\\n')
 
     mm = RTCData.from_string(str_msg)
-    print mm.to_string()
+    print mm
+
+    peets_msg = PeetsMessage(PeetsMessage.Join, User('obama', '/whitehouse', '/whitehouse/restroom', 'maobama'), m)
     
+    print peets_msg
+
+    pmf = PeetsMessage.from_string(str(peets_msg))
+    print pmf
