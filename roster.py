@@ -16,7 +16,7 @@ class Roster(FreshList):
   __logger = Logger.get_logger('Roster')
 
   def __init__(self, chatroom_prefix, msg_callback, get_local_user, *args, **kwargs):
-    super(Roster, self).__init__(self.refresh_self, self.reap_callback, *args, **kwargs)
+    super(Roster, self).__init__(self.announce, self.reap_callback, *args, **kwargs)
     self.msg_callback = msg_callback
     self.get_local_user = get_local_user
     self.joined = False
@@ -26,10 +26,10 @@ class Roster(FreshList):
     self.ccnx_sock.start()
     self.chronos_sock = SimpleChronosSocket(chatroom_prefix, self.fetch_peets_msg)
     # send join after 0.5 second
-    self.schedule_next(0.5, self.refresh_self)
+    self.schedule_next(0.5, self.announce)
 
   def fetch_peets_msg(self, name):
-    print "Fetching name: " + name
+    print self.get_local_user().nick, "Fetching name: " + name
     self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
     
   def process_peets_msg(self, interest, data):
@@ -45,50 +45,46 @@ class Roster(FreshList):
     try:
       msg = PeetsMessage.from_string(content)
       if msg.msg_type == PeetsMessage.Join:
-        print 'join from', msg.user
         ru = RemoteUser(msg.user)
-        self.add(prefix, ru)
-        print 'self.instances', self.instances
+        self[prefix] = ru
         self.msg_callback(msg)
       elif msg.msg_type == PeetsMessage.Hello:
-        self.refresh_for(prefix)
+        self.announce_received(prefix)
       elif msg.msg_type == PeetsMessage.Leave:
-        self.delete(prefix)
+        del self[prefix]
         self.msg_callback(msg)
-      elif msg.msg_type == PeetsMessage.RTC:
-        self.msg_callback(msg) 
       else:
-        print "dafaq"
-        pass
+        self.__class__.__logger.error("unknown PeetsMessage type")
     except KeyError as e:
       Roster.__logger.exception("PeetsMessage does not have type or from")
 
+  # used by FreshList when zombie is reaped
   def reap_callback(self, remote_user):
-    peets_msg = PeetsMessage(PeetsMessage.Leave, remote_user, None)
+    peets_msg = PeetsMessage(PeetsMessage.Leave, remote_user)
     self.msg_callback(peets_msg)
 
-  def refresh_self(self):
+  def announce(self):
     user = self.get_local_user()
-    msg_type = PeetsMessage.Hello
-    msg = PeetsMessage(msg_type, None, None)
+    msg_type = PeetsMessage.Hello if self.joined else PeetsMessage.Join
+    msg = PeetsMessage(msg_type, user)
     msg_str = str(msg)
     self.chronos_sock.publish_string(user.prefix, self.session, msg_str, StateObject.default_ttl)
+    self.joined = True
 
-  def publish_peets_msg(self, peets_msg):
-    msg_str = str(peets_msg)
-    self.chronos_sock.publish_string(peets_msg.user.prefix, self.session, msg_str, StateObject.default_ttl)
-    if peets_msg.msg_type == PeetsMessage.Join:
-      self.joined = True
-      print 'joined', peets_msg
-    elif peets_msg.msg_type == PeetsMessage.Leave:
-      self.joined = False
+  def leave(self):
+    user = self.get_local_user()
+    msg_type = PeetsMessage.Leave
+    msg = PeetsMessage(msg_type, user)
+    msg_str = str(msg)
+    self.chronos_sock.publish_string(user.prefix, self.session, msg_str, StateObject.default_ttl)
+    self.joined = False
 
-      # clean up our footprint in the chronos sync tree
-      def clean_up():
-        self.chronos_sock.remove(peets_msg.user.prefix)
+    # clean up our footprint in the chronos sync tree
+    def clean_up():
+      self.chronos_sock.remove(user.prefix)
 
-      # event loop thread should wait until we clean up
-      self.schedule_next(0.5, clean_up)
+    # event loop thread should wait until we clean up
+    self.schedule_next(0.5, clean_up)
     
     
 if __name__ == '__main__':
@@ -108,18 +104,16 @@ if __name__ == '__main__':
   print "------ Creating the first roster object ------"
   roster1 = Roster('/test/chat', msg_callback, user_local_info_1)
   msg1 = PeetsMessage(PeetsMessage.Join, user_local_info_1(), None)
-  sleep(0.5)
-  roster1.publish_peets_msg(msg1)
   sleep(2)
   print "------ Creating the second roster object ------"
   roster2 = Roster('/test/chat', msg_callback, user_local_info_2)
   msg2 = PeetsMessage(PeetsMessage.Join, user_local_info_2(), None)
-  sleep(0.5)
-  roster2.publish_peets_msg(msg2)
 
   sleep(10)
+  roster2.leave()
+  roster2.shutdown()
+  sleep(10)
   roster1.shutdown()
-  sleep(20)
   print "------ main thread should exit now ------"
 
 

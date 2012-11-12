@@ -53,38 +53,56 @@ class FreshList(object):
     self.scheduler.shutdown(wait = wait)
 
   def reap(self):
-    self.__rlock.acquire()
-    zombies = filter(lambda(k, state_object): not state_object.is_active(), self.instances.iteritems())
-    self.instances = dict(filter(lambda (k, state_object): state_object.is_active(), self.instances.iteritems()))
-    self.__rlock.release()
+    with self.__rlock:
+      zombies = filter(lambda(k, state_object): not state_object.is_active(), self.instances.iteritems())
+      self.instances = dict(filter(lambda (k, state_object): state_object.is_active(), self.instances.iteritems()))
     map(lambda(k, state_object): self.reap_callback(state_object), zombies)
     
-  def refresh_for(self, k):
-    self.__rlock.acquire()
-    try:
-      self.instances[k].refresh_timestamp()
-    except KeyError as e:
-      #FreshList._logger.exception("Try to refresh non-exist state object")
-      print self.instances
-      #raise e
-    finally:
-      self.__rlock.release()
+  def announce_received(self, k):
+    with self.__rlock:
+      try:
+        self.instances[k].refresh_timestamp()
+      except KeyError as e:
+        FreshList._logger.exception("Try to refresh non-exist state object")
+        print self.instances
+        raise e
 
-  def get(self, k):
-    return self.instances.get(k, None)
+  def __getitem__(self, k):
+    with self.__rlock:
+      return self.instances.get(k, None)
 
-  def add(self, k, state_object):
-    self.__rlock.acquire()
-    self.instances[k] = state_object
-    self.__rlock.release()
+  def __setitem__(self, k, state_object):
+    with self.__rlock:
+      self.instances[k] = state_object
     
-  def delete(self, k):
-    self.__rlock.acquire()
-    try:
-      del self.instances[k]
-    except KeyError as e:
-      FreshList._logger.exception("Try to del non-exist state object")
-      raise e
-    finally:
-      self.__rlock.release()
-  
+  def __delitem__(self, k):
+    with self.__rlock:
+      try:
+        del self.instances[k]
+      except KeyError as e:
+        FreshList._logger.exception("Try to del non-exist state object")
+        raise e
+
+  def __len__(self):
+    with self.__rlock:
+      return len(self.instances)
+
+  def clear(self):
+    with self.__rlock:
+      self.instances.clear()
+
+  def has_key(self, key):
+    with self.__rlock:
+      return self.instances.has_key(key)
+
+  def keys(self):
+    with self.__rlock:
+      return self.instances.keys()
+    
+  def values(self):
+    with self.__rlock:
+      return self.instances.values()
+
+  def items(self):
+    with self.__rlock:
+      return self.instances.items()
