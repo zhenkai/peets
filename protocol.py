@@ -16,7 +16,6 @@ class PeetsServerProtocol(WebSocketServerProtocol):
   '''
 
   __logger = Logger.get_logger('PeetsServerProtocol')
-  (Stopped, Probing, Streaming) = range(3)
 
   # a decorator method for logging. using decorator just for fun
   def logging(fn):
@@ -32,21 +31,13 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     #WebSocketServerProtocol.__init__(self, *args, **kwargs)
     lst = map(lambda x: random.choice(string.ascii_letters + string.digits), range(16))
     self.id = ''.join(lst)
+    self.local_user = User(self.id, '/local/test', self.id)
     self.media_sink_ports = {}
     self.media_source_port = None
     self.media_source_sdp = None
     self.ip = None
     self.local_seq = 0
-    self.requested_seq = 0
-    self.fetched_seq = 0
-    self.streaming_state = PeetsServerProtocol.Stopped
-    self.timeouts = 0
 
-  def reset(self):
-    self.requested_seq = 0
-    self.fetched_seq = 0
-    self.streaming_state = PeetsServerProtocol.Stopped
-    self.timeouts = 0
     
   def onOpen(self):
     pass
@@ -80,7 +71,17 @@ class PeetsServerFactory(WebSocketServerFactory):
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
     self.handlers = {'join_room' : self.handle_join, 'send_ice_candidate' : self.handle_ice_candidate, 'send_offer' : self.handle_offer, 'send_answer' : self.handle_answer, 'chat_msg': self.handle_chat}
     self.clients = []
+    self.roster = None
     self.listen_port = 9003
+
+  def local_user_info(self):
+    return clients[0].local_user
+
+  def remote_join_callback(self, remote_user):
+    pass
+
+  def remote_leave_callback(self, remote_user):
+    pass
 
   def unregister(self, client):
     if client in self.clients:
@@ -109,7 +110,7 @@ class PeetsServerFactory(WebSocketServerFactory):
 
       d = RTCData(connections = ids)
       msg = RTCMessage('get_peers', d)
-      client.sendMessage(msg.to_string())
+      client.sendMessage(str(msg))
 
       self.clients.append(client)
     else:
@@ -135,7 +136,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     
       for c in self.clients:
         if c.id == data.socketId:
-          c.sendMessage(msg.to_string())
+          c.sendMessage(str(msg))
 
   def handle_offer(self, client, data):
     if client.media_source_sdp is None:
@@ -146,7 +147,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     #self.broadcast(client, msg)
     for c in self.clients:
       if c.id == data.socketId:
-        c.sendMessage(msg.to_string())
+        c.sendMessage(str(msg))
 
   def handle_answer(self, client, data):
     if client.media_source_sdp is None:
@@ -156,14 +157,14 @@ class PeetsServerFactory(WebSocketServerFactory):
     #self.broadcast(client, msg)
     for c in self.clients:
       if c.id == data.socketId:
-        c.sendMessage(msg.to_string())
+        c.sendMessage(str(msg))
 
   def handle_chat(self, client, data):
     msg = RTCMessage('receive_chat_msg', data)
     self.broadcast(client, msg)
 
   def broadcast(self, client, msg):
-    str_msg = msg.to_string()
+    str_msg = str(msg)
     for c in self.clients:
       if c is not client:
         c.sendMessage(str_msg)

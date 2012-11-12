@@ -64,8 +64,9 @@ class FreshList(object):
     try:
       self.instances[k].refresh_timestamp()
     except KeyError as e:
-      FreshList._logger.exception("Try to refresh non-exist state object")
-      raise e
+      #FreshList._logger.exception("Try to refresh non-exist state object")
+      print self.instances
+      #raise e
     finally:
       self.__rlock.release()
 

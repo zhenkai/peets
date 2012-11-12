@@ -42,8 +42,8 @@ class User(object):
 
 class RemoteUser(User, StateObject):
   (Stopped, Probing, Streaming) = range(3)
-  def __init__(self, nick, prefix, audio_prefix, *args, **kwargs):
-    super(RemoteUser, self).__init__(nick, prefix, audio_prefix, *args, **kwargs)
+  def __init__(self, user, *args, **kwargs):
+    super(RemoteUser, self).__init__(user.nick, user.prefix, user.audio_prefix, user.uid, *args, **kwargs)
     self.requested_seq = 0
     self.fetched_seq = 0
     self.streaming_state = self.__class__.Stopped
@@ -73,8 +73,8 @@ class RemoteUser(User, StateObject):
     
 
 if __name__ == '__main__':
-  ru = RemoteUser("hi", "/hi", "/hi/audio")
-  print ru.get_prescence()
-
   u = User('hi', '/hi', '/hi/audio', 'lkasdjf')
   print User.from_string(str(u))
+
+  ru = RemoteUser(u)
+  print ru.get_prescence()
