@@ -1,6 +1,8 @@
 from autobahn.websocket import WebSocketServerProtocol, WebSocketServerFactory
 from twisted.internet.protocol import DatagramProtocol
 from message import RTCMessage, RTCData, Candidate
+from user import User, RemoteUser
+from roster import Roster
 from log import Logger
 import random, string
 from ccnxsocket import CcnxSocket, PeetsClosure
@@ -8,6 +10,7 @@ from pyccn import Name, Interest
 import pyccn
 from apscheduler.scheduler import Scheduler
 import operator
+from time import sleep
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -44,7 +47,6 @@ class PeetsServerProtocol(WebSocketServerProtocol):
 
   #@logging
   def onMessage(self, msg, binary):
-    #print "Message is", msg
     self.factory.process(self, msg)
 
   def onClose(self, wasClean, code, reason):
@@ -70,25 +72,54 @@ class PeetsServerFactory(WebSocketServerFactory):
     # apparently WebSocketServerFactory is old style class
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
     self.handlers = {'join_room' : self.handle_join, 'send_ice_candidate' : self.handle_ice_candidate, 'send_offer' : self.handle_offer, 'send_answer' : self.handle_answer, 'chat_msg': self.handle_chat}
-    self.clients = []
+    # keep the list of local clients, first, we deal with the case where there is only one local client
+    self.client = None
+    # keep the list of remote users
     self.roster = None
     self.listen_port = 9003
+    self.ccnx_socket = CcnxSocket()
+    self.ccnx_socket.start()
+    self.local_status_callback = lambda status: 0
 
-  def local_user_info(self):
-    return clients[0].local_user
+  def set_local_status_callback(self, callback):
+    self.local_status_callback = callback
 
-  def remote_join_callback(self, remote_user):
-    pass
+  def peets_msg_callback(self, peets_msg):
+    remote_user = peets_msg.user
+    if peets_msg.msg_type == PeetsMessage.Join:
+      if self.roster.has_key(remote_user.uid):
+        self.__class__.__logger.info("Redundant join message from %s", remote_user.get_sync_prefix())
+        return
+      
+      data = RTCData(socketId = remote_user.uid)
+      msg = RTCMessage('new_peer_connected', data)
+      client.sendMessage(str(msg))
+      name = remote_user.get_sdp_prefix()
 
-  def remote_leave_callback(self, remote_user):
-    pass
+      def sdp_callback(interest, data):
+        content = data.content
+        offer_msg = RTCMessage.from_string(content)
+        d = RTCData(socketId = self.client.id, sdp = offer_msg.data.sdp)
+        # this is the answer to the local user
+        answer_msg = RTCMessage('receive_answer', offer_msg.data)
+        self.client.sendMessage(str(answer_msg))
+   
+      self.ccnx_socket.send_interest(name, PeetsClosure(sdp_callback))
+
+    elif peets_msg.msg_type == PeetsMessage.Leave:
+      data = RTCData(socketId = remote_user.uid)
+      msg = RTCMessage('remove_peer_connected', data)
+      self.client.sendMessage(str(msg))
+    else:
+      pass
 
   def unregister(self, client):
-    if client in self.clients:
+    if self.client is not None and client.id == self.client.id:
+      self.local_status_callback('Stopped')
       self.handle_leave(client)
       PeetsServerFactory.__logger.info("unregister client %s", client.id)
-      self.clients.remove(client)
-
+      self.client = None
+      self.roster = None
 
   def process(self, client, msg):
     rtcMsg = RTCMessage.from_string(msg)
@@ -99,28 +130,28 @@ class PeetsServerFactory(WebSocketServerFactory):
       PeetsServerFactory.__logger.error("Unknown event name: " + rtcMsg.eventName)
 
   def handle_join(self, client, data):
-    if not client in self.clients:
+    if self.client is None:
+      print 'handle_join', data, 'from', client
       PeetsServerFactory.__logger.info('register client %s', client.id)
 
-      d = RTCData(socketId = client.id)
-      msg = RTCMessage('new_peer_connected', d)
-      self.broadcast(client, msg)
-
-      ids = map(lambda c: c.id, self.clients)
-
-      d = RTCData(connections = ids)
+      d = RTCData(connections = [])
       msg = RTCMessage('get_peers', d)
       client.sendMessage(str(msg))
 
-      self.clients.append(client)
+      self.client = client
+      self.__class__.__logger.debug("self.client is %s", self.client.id)
+      # announce self in NDN
+      self.roster = Roster('/chatroom', self.peets_msg_callback, lambda: self.client.local_user)
+      self.local_status_callback('Running')
     else:
-      PeetsServerFactory.__logger.info("Redundant join message from: %s" + client.id)
+      PeetsServerFactory.__logger.info("Join message from: %s, but we already have a client: %s", client.id, self.client.id)
 
   def handle_leave(self, client):
-    data = RTCData(socketId = client.id)
-    msg = RTCMessage('remove_peer_connected', data)
-    self.broadcast(client, msg)
+    self.roster.leave()
+    sleep(1.1)
+    
 
+  # this method is local, i.e. no leak to NDN
   def handle_ice_candidate(self, client, data):
     candidate = Candidate.from_string(data.candidate)
     if client.media_sink_ports.get(data.socketId) is None:
@@ -133,44 +164,50 @@ class PeetsServerFactory(WebSocketServerFactory):
       candidate = Candidate(('127.0.0.1', str(self.listen_port)))
       d = RTCData(candidate = str(candidate), socketId = client.id)
       msg = RTCMessage('receive_ice_candidate', d)
-    
-      for c in self.clients:
-        if c.id == data.socketId:
-          c.sendMessage(str(msg))
-
+      self.client.sendMessage(str(msg))
+      
   def handle_offer(self, client, data):
     if client.media_source_sdp is None:
       client.media_source_sdp = data.sdp
 
     d = RTCData(sdp = client.media_source_sdp, socketId = client.id)
     msg = RTCMessage('receive_offer', d)
-    #self.broadcast(client, msg)
-    for c in self.clients:
-      if c.id == data.socketId:
-        c.sendMessage(str(msg))
+
+    name = client.user.get_sdp_prefix() 
+    # publish sdp msg
+    self.ccnx_socket.publish_content(name, str(msg))
+
+    class SDPClosure(Closure):
+      def __init__(self):
+        super(SDPClosure, self).__init_()
+
+      def upcall(self, kind, upcallInfo):
+        if kind == pyccn.UPCALL_INTEREST:
+          self.ccnx_socket.publish_content(name, str(msg))
+
+        return pyccn.RESULT_OK
+
+    self.ccnx_socket.register_prefix(name, SDPClosure())
 
   def handle_answer(self, client, data):
-    if client.media_source_sdp is None:
-      client.media_source_sdp = data.sdp
-    d = RTCData(sdp = client.media_source_sdp, socketId = client.id)
-    msg = RTCMessage('receive_answer', d)
-    #self.broadcast(client, msg)
-    for c in self.clients:
-      if c.id == data.socketId:
-        c.sendMessage(str(msg))
+    pass
+
+  def has_local_client(self):
+    return self.client is not None and self.roster is not None
+#    if client.media_source_sdp is None:
+#      client.media_source_sdp = data.sdp
+#    d = RTCData(sdp = client.media_source_sdp, socketId = client.id)
+#    msg = RTCMessage('receive_answer', d)
+#    #self.broadcast(client, msg)
+#    for c in self.clients:
+#      if c.id == data.socketId:
+#        c.sendMessage(str(msg))
 
   def handle_chat(self, client, data):
     msg = RTCMessage('receive_chat_msg', data)
     self.broadcast(client, msg)
 
-  def broadcast(self, client, msg):
-    str_msg = str(msg)
-    for c in self.clients:
-      if c is not client:
-        c.sendMessage(str_msg)
-
-
-class PeetsTranslator(DatagramProtocol):
+class PeetsMediaTranslator(DatagramProtocol):
   ''' A translator protocol to relay local udp traffic to NDN and remote NDN traffic to local udp
   This class also implements the strategy for fetching remote data.
   If the remote seq is unknown, use a short prefix without seq to probe;
@@ -180,6 +217,7 @@ class PeetsTranslator(DatagramProtocol):
     self.factory = factory
     self.pipe_size = pipe_size
     self.factory = factory
+    self.factory.set_local_status_callback(self.toggle_scheduler)
     # here we use two sockets, because the pending interests sent by a socket can not be satisified
     # by the content published later by the same socket
     self.ccnx_int_socket = CcnxSocket()
@@ -188,94 +226,99 @@ class PeetsTranslator(DatagramProtocol):
     self.ccnx_con_socket.start()
     self.stream_closure = PeetsClosure(self.stream_callback, self.stream_timeout_callback)
     self.probe_closure = PeetsClosure(self.probe_callback, self.probe_timeout_callback)
-    self.scheduler = Scheduler()
-    self.scheduler.start()
-    self.scheduler.add_interval_job(self.fetch_media, seconds = 0.01)
+    self.scheduler = None
     
+  def toggle_scheduler(self, status):
+    if status == 'Running':
+      self.scheduler = Scheduler()
+      self.scheduler.start()
+      self.scheduler.add_interval_job(self.fetch_media, seconds = 0.01)
+      print '=================== adding fetching job'
+    elif status == 'Stopped':
+      for job in self.scheduler.get_jobs():
+        self.scheduler.unschedule_job(job)
+        print 'removing', job
+      self.scheduler.shutdown(wait = True)
+      self.scheduler = None
+      print '================== removing fetching job'
+
   def datagramReceived(self, data, (host, port)):
-    clients = self.factory.clients
-    for c in clients:
-      # only publishes one copy of the video
-      if c.media_source_port == port:
-        name = '/local/test/' + c.id + '/' + str(c.local_seq)
-        c.local_seq += 1
-        self.ccnx_con_socket.publish_content(name, data)
+    # only publishes one copy of the video
+    c = self.factory.client
+    if c.media_source_port == port:
+      name = c.user.get_media_prefix() + '/' + str(c.local_seq)
+      c.local_seq += 1
+      self.ccnx_con_socket.publish_content(name, data)
 
-      if port in c.media_sink_ports.values():
-        print 'udp received', c.id, host, port
-
+  def get_info_from_name(self, name):
+    comps = str(name).split('/')
+    cid = comps[-3]
+    seq = comps[-1]
+    remote_user = self.factory.roster.get(cid)
+    return remote_user, cid, seq
 
   def stream_callback(self, interest, data):
-    name = data.name
     content = data.content
-    cid, seq = str(name).split('/')[-2:]
-    clients = self.factory.clients
-    for c in clients:
-      if c.id != cid and cid in c.media_sink_ports:
-        self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
-      else:
-        c.fetched_seq = int(seq)
-        c.timeouts = 0
+    remote_user, cid, seq = get_info_from_name(data.name)
+    c = self.factory.client
+    if cid in c.media_sink_ports:
+      self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+
+    if remote_user is not None:
+      remote_user.fetched_seq = int(seq)
+      remote_user.timeouts = 0
 
   def probe_callback(self, interest, data):
-    name = data.name
     content = data.content
-    cid, seq = str(name).split('/')[-2:]
-    #self.stream_callback(interest, data)
-    for c in self.factory.clients:
-      if c.id == cid:
-        c.requested_seq = int(seq)
-        c.fetched_seq = int(seq)
-        c.timeouts = 0
-        c.streaming_state = PeetsServerProtocol.Streaming
+    remote_user, cid, seq = get_info_from_name(data.name)
+    c = self.factory.client
+    if cid in c.media_sink_ports:
+      self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+
+    if remote_user is not None:
+      remote_user.requested_seq = int(seq)
+      remote_user.fetched_seq = int(seq)
+      remote_user.timeouts = 0
+      remote_user.streaming_state = RemoteUser.Streaming
 
   def stream_timeout_callback(self, interest):
     # do not reexpress for non-probing interest
-    name = interest.name
-    cid = str(name).split('/')[-2]
-    for c in self.factory.clients:
-      if c.id == cid:
-        c.timeouts += 1
-        if c.timeouts >= self.pipe_size:
-          #print self.pipe_size, 'consecutive timeouts', interest.name
-          c.reset()
+    remote_user, cid, seq = get_info_from_name(interest.name)
+    if remote_user is not None:
+      remote_user.timeouts += 1
+      if remote_user.timeouts >= self.pipe_size:
+        remote_user.reset()
           
     return pyccn.RESULT_OK
 
   def probe_timeout_callback(self, interest):
-    return pyccn.RESULT_REEXPRESS
+    comps = str(interest.name).split('/')
+    cid = comps[-2]
+    if self.factory.roster.get(cid) is not None:
+      return pyccn.RESULT_REEXPRESS
     
   def fetch_media(self):
-    clients = self.factory.clients
-    if len(clients) < 2:
-      pass
-    
-    for c in clients:
-      if c.streaming_state == PeetsServerProtocol.Stopped:
-
-        name = '/local/test/' + c.id
-
-        template = Interest(childSelector = 1)
-        self.ccnx_int_socket.send_interest(Name(name), self.probe_closure, template)
-        c.streaming_state = PeetsServerProtocol.Probing
-        
-      elif c.streaming_state == PeetsServerProtocol.Streaming and c.requested_seq - c.fetched_seq < self.pipe_size:
-          name = '/local/test/' + c.id + '/' + str(c.requested_seq + 1)
-          c.requested_seq += 1
-          #print 'streaming: ', name
-          self.ccnx_int_socket.send_interest(Name(name), self.stream_closure)
-          if c.requested_seq % 100 == 0:
-            pass
-            #print map(lambda c: c.id, clients)
-            print map(lambda c: c.media_sink_ports, clients)
-      else:
-        #print 'c.streaming_state', c.streaming_state
-        pass
+    if self.factory.has_local_client():
+      for remote_user in self.factory.roster.values():
+        print 'start remote'
+        if remote_user.streaming_state == PeetsServerProtocol.Stopped:
+          name = remote_user.get_media_prefix()
+          template = Interest(childSelector = 1)
+          self.ccnx_int_socket.send_interest(Name(name), self.probe_closure, template)
+          remote_user.streaming_state = PeetsServerProtocol.Probing
+          
+        elif remote_user.streaming_state == PeetsServerProtocol.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
+            name = remote_user.get_media_prefix() + str(remote_user.requested_seq + 1)
+            remote_user.requested_seq += 1
+            self.ccnx_int_socket.send_interest(Name(name), self.stream_closure)
+        else:
+          pass
+        print 'end remote'
 
 if __name__ == '__main__':
   peets_factory = PeetsServerFactory("ws://localhost:8000")
   peets_factory.protocol = PeetsServerProtocol
-  PeetsTranslator(peets_factory, 100)
+  PeetsMediaTranslator(peets_factory, 100)
   from time import sleep
   sleep(2)       
     

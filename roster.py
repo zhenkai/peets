@@ -46,20 +46,21 @@ class Roster(FreshList):
     if self.status == self.__class__.Stopped:
       return
 
-    name = data.name
+    #name = data.name
     content = data.content
-    prefix = '/'.join(str(name).split('/')[:-2])
+    #prefix = '/'.join(str(name).split('/')[:-2])
 
     try:
       msg = PeetsMessage.from_string(content)
+      uid = msg.user.uid
       if msg.msg_type == PeetsMessage.Join:
         ru = RemoteUser(msg.user)
-        self[prefix] = ru
+        self[uid] = ru
         self.msg_callback(msg)
       elif msg.msg_type == PeetsMessage.Hello:
-        self.announce_received(prefix)
+        self.announce_received(uid)
       elif msg.msg_type == PeetsMessage.Leave:
-        del self[prefix]
+        del self[uid]
         self.msg_callback(msg)
       else:
         self.__class__.__logger.error("unknown PeetsMessage type")
@@ -80,7 +81,7 @@ class Roster(FreshList):
     msg_type = PeetsMessage.Hello if self.status == self.__class__.Joined else PeetsMessage.Join
     msg = PeetsMessage(msg_type, user)
     msg_str = str(msg)
-    self.chronos_sock.publish_string(user.prefix, self.session, msg_str, StateObject.default_ttl)
+    self.chronos_sock.publish_string(user.get_sync_prefix(), self.session, msg_str, StateObject.default_ttl)
     self.status = self.__class__.Joined
 
   def leave(self):
@@ -88,12 +89,12 @@ class Roster(FreshList):
     msg_type = PeetsMessage.Leave
     msg = PeetsMessage(msg_type, user)
     msg_str = str(msg)
-    self.chronos_sock.publish_string(user.prefix, self.session, msg_str, StateObject.default_ttl)
+    self.chronos_sock.publish_string(user.get_sync_prefix(), self.session, msg_str, StateObject.default_ttl)
     self.status = self.__class__.Stopped
 
     # clean up our footprint in the chronos sync tree
     def clean_up():
-      self.chronos_sock.remove(user.prefix)
+      self.chronos_sock.remove(user.get_sync_prefix())
       print 'cleaning up'
       def clean_up():
         self.chronos_sock.stop()
@@ -115,10 +116,10 @@ if __name__ == '__main__':
       print 'User %s left' % msg.user.nick
 
   def user_local_info_1():
-    return User('tom', '/roster/tom', '/roster/tom/audio', '12343')
+    return User('tom', '/roster/tom', '12343')
 
   def user_local_info_2():
-    return User('jerry', '/roster/jerry', '/roster/jerry/audio', 'lkasjdfs')
+    return User('jerry', '/roster/jerry', 'lkasjdfs')
 
   print "------ Creating the first roster object ------"
   roster1 = Roster('/test/chat', msg_callback, user_local_info_1)

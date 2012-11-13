@@ -5,27 +5,32 @@ class User(object):
   ''' Store the common information of a user '''
   Available, Unavailable = range(2)
 
-  def __init__(self, nick, prefix, audio_prefix, uid = None, *args, **kwargs):
+  def __init__(self, nick, prefix, uid, *args, **kwargs):
     ''' somehow, this must also calls super in order for all 
         base classes to be initialized when the subclass calls
         its super init function
 
         The prefix here is the identity prefix for a user used
         in the chronos sync tree. It's not exactly the same as the
-        audio prefix, but may be the prefix of the audio prefix
+        media prefix, but may be the prefix of the media prefix
     '''
     super(User, self).__init__()
     self.nick = nick
     self.prefix = prefix
-    self.audio_prefix = audio_prefix
     self.uid = uid
 
 
   def get_nick(self):
     return self.nick
 
-  def get_prefix(self):
-    return self.prefix
+  def get_media_prefix(self):
+    return self.prefix + '/' + self.nick + '/' + self.uid + '/media'
+
+  def get_sdp_prefix(self):
+    return self.prefix + '/' + self.nick + '/' + self.uid + '/sdp'
+
+  def get_sync_prefix(self):
+    return self.prefix + '/' + self.nick + '/' + self.uid
 
   def __str__(self):
     class UserEncoder(json.JSONEncoder):
@@ -36,14 +41,14 @@ class User(object):
   @classmethod
   def from_string(self, str_user):
     def as_user(dct):
-      return User(dct['nick'], dct['prefix'], dct['audio_prefix'], dct['uid'])
+      return User(dct['nick'], dct['prefix'], dct['uid'])
     
     return json.loads(str_user, object_hook = as_user)
 
 class RemoteUser(User, StateObject):
   (Stopped, Probing, Streaming) = range(3)
   def __init__(self, user, *args, **kwargs):
-    super(RemoteUser, self).__init__(user.nick, user.prefix, user.audio_prefix, user.uid, *args, **kwargs)
+    super(RemoteUser, self).__init__(user.nick, user.prefix, user.uid, *args, **kwargs)
     self.requested_seq = 0
     self.fetched_seq = 0
     self.streaming_state = self.__class__.Stopped
@@ -69,12 +74,15 @@ class RemoteUser(User, StateObject):
     elif self is not None and other is None:
       return False
     else:
-      return (self.nick == other.nick and self.preifx == other.prefix and self.audio_prefix == other.audio_prefix and self.uid == other.uid)
+      return (self.nick == other.nick and self.preifx == other.prefix and self.uid == other.uid)
     
 
 if __name__ == '__main__':
-  u = User('hi', '/hi', '/hi/audio', 'lkasdjf')
+  u = User('hi', '/hi', 'lkasdjf')
   print User.from_string(str(u))
+  print u.get_media_prefix()
+  print u.get_sdp_prefix()
+  print u.get_sync_prefix()
 
   ru = RemoteUser(u)
   print ru.get_prescence()

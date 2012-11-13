@@ -5,7 +5,7 @@ from twisted.web.server import Site
 from twisted.web.static import File
 from twisted.python import log
 from autobahn.websocket import listenWS
-from protocol import PeetsServerProtocol, PeetsServerFactory, PeetsTranslator
+from protocol import PeetsServerProtocol, PeetsServerFactory, PeetsMediaTranslator
 
 
 if __name__ == '__main__':
@@ -17,5 +17,5 @@ if __name__ == '__main__':
   resource = File('frontend')
   factory = Site(resource)
   reactor.listenTCP(8888, factory)
-  reactor.listenUDP(9003, PeetsTranslator(peets_factory, 20))
+  reactor.listenUDP(9003, PeetsMediaTranslator(peets_factory, 20))
   reactor.run()

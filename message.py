@@ -5,13 +5,12 @@ from user import User
 class PeetsMessage(object):
   ''' a message class that carries prescence and NDN related info of a participant
   '''
-  Join, Hello, Leave, RTC = range(4)  
+  Join, Hello, Leave = range(3)  
 
-  def __init__(self, msg_type, user, msg_content, *args, **kwargs):
+  def __init__(self, msg_type, user, *args, **kwargs):
     super(PeetsMessage, self).__init__()
     self.msg_type = msg_type
     self.user =  user
-    self.msg_content = msg_content
 
   def __str__(self):
     class PeetsMessageEncoder(json.JSONEncoder):
@@ -23,12 +22,7 @@ class PeetsMessage(object):
   @classmethod
   def from_string(self, str_msg):
     dct = json.loads(str_msg)
-    if dct.get('msg_content') is not None and dct.get('user') is not None:
-      return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')), RTCMessage(**dct.get('msg_content')))
-    elif dct.get('user') is not None:
-      return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')), None)
-    else:
-      return PeetsMessage(dct.get('msg_type'), None, None)
+    return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')))
 
 class RTCMessage(object):
   ''' a class that interacts with webrtc.io.js using their defined message
@@ -129,7 +123,7 @@ if __name__ == '__main__':
     mm = RTCData.from_string(str_msg)
     print mm
 
-    peets_msg = PeetsMessage(PeetsMessage.Join, User('obama', '/whitehouse', '/whitehouse/restroom', 'maobama'), m)
+    peets_msg = PeetsMessage(PeetsMessage.Join, User('obama', '/whitehouse', '/whitehouse/restroom', 'maobama'))
     
     print peets_msg
 
