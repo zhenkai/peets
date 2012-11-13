@@ -50,7 +50,7 @@ class FreshList(object):
     self.scheduler.add_date_job(func, datetime.now() + timedelta(seconds = interval))
 
   def shutdown(self, wait = False):
-    self.scheduler.shutdown(wait = wait)
+    self.scheduler.shutdown(wait = False)
 
   def reap(self):
     with self.__rlock:
