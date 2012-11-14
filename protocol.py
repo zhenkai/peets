@@ -67,7 +67,7 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   __logger = Logger.get_logger('PeetsServerFactory')
   
-  def __init__(self, url = None, protocols = [], debug = False, debugCodePaths = False):
+  def __init__(self, udp_port, url = None, protocols = [], debug = False, debugCodePaths = False):
     # super can only work with new style classes which inherits from object
     # apparently WebSocketServerFactory is old style class
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
@@ -76,7 +76,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.client = None
     # keep the list of remote users
     self.roster = None
-    self.listen_port = 9003
+    self.listen_port = udp_port
     self.ccnx_socket = CcnxSocket()
     self.ccnx_socket.start()
     self.local_status_callback = lambda status: 0
@@ -168,7 +168,7 @@ class PeetsServerFactory(WebSocketServerFactory):
         client.ip = candidate.ip
       
       candidate = Candidate(('127.0.0.1', str(self.listen_port)))
-      d = RTCData(candidate = str(candidate), socketId = client.id)
+      d = RTCData(candidate = str(candidate), socketId = data.socketId)
       msg = RTCMessage('receive_ice_candidate', d)
       self.client.sendMessage(str(msg))
       
@@ -215,7 +215,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     self.ccnx_con_socket = CcnxSocket()
     self.ccnx_con_socket.start()
     self.stream_closure = PeetsClosure(msg_callback = self.stream_callback, timeout_callback = self.stream_timeout_callback)
-    self.probe_closure = PeetsClosure(self.probe_callback, self.probe_timeout_callback)
+    self.probe_closure = PeetsClosure(msg_callback = self.probe_callback, timeout_callback = self.probe_timeout_callback)
     self.scheduler = None
     
   def toggle_scheduler(self, status):
@@ -233,20 +233,22 @@ class PeetsMediaTranslator(DatagramProtocol):
     # only publishes one copy of the video
     c = self.factory.client
     if c.media_source_port == port:
-      name = c.user.get_media_prefix() + '/' + str(c.local_seq)
+      name = c.local_user.get_media_prefix() + '/' + str(c.local_seq)
       c.local_seq += 1
       self.ccnx_con_socket.publish_content(name, data)
+      print 'publish', name
 
   def get_info_from_name(self, name):
     comps = str(name).split('/')
     cid = comps[-3]
     seq = comps[-1]
-    remote_user = self.factory.roster.get(cid)
+    remote_user = self.factory.roster[cid]
     return remote_user, cid, seq
 
   def stream_callback(self, interest, data):
+    print '>> fetched', data.name
     content = data.content
-    remote_user, cid, seq = get_info_from_name(data.name)
+    remote_user, cid, seq = self.get_info_from_name(data.name)
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
@@ -257,7 +259,7 @@ class PeetsMediaTranslator(DatagramProtocol):
 
   def probe_callback(self, interest, data):
     content = data.content
-    remote_user, cid, seq = get_info_from_name(data.name)
+    remote_user, cid, seq = self.get_info_from_name(data.name)
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
@@ -270,7 +272,7 @@ class PeetsMediaTranslator(DatagramProtocol):
 
   def stream_timeout_callback(self, interest):
     # do not reexpress for non-probing interest
-    remote_user, cid, seq = get_info_from_name(interest.name)
+    remote_user, cid, seq = self.get_info_from_name(interest.name)
     if remote_user is not None:
       remote_user.timeouts += 1
       if remote_user.timeouts >= self.pipe_size:
@@ -281,25 +283,27 @@ class PeetsMediaTranslator(DatagramProtocol):
   def probe_timeout_callback(self, interest):
     comps = str(interest.name).split('/')
     cid = comps[-2]
-    if self.factory.roster.get(cid) is not None:
+    if self.factory.roster is not None and self.factory.roster[cid] is not None:
+      print 'probing timeout', interest.name
       return pyccn.RESULT_REEXPRESS
     
   def fetch_media(self):
     if self.factory.has_local_client():
       for remote_user in self.factory.roster.values():
-        if remote_user.streaming_state == PeetsServerProtocol.Stopped:
+        if remote_user.streaming_state == RemoteUser.Stopped:
           name = remote_user.get_media_prefix()
           template = Interest(childSelector = 1)
           self.ccnx_int_socket.send_interest(name, self.probe_closure, template)
-          remote_user.streaming_state = PeetsServerProtocol.Probing
+          remote_user.streaming_state = RemoteUser.Probing
+          print 'probing', name
           
-        elif remote_user.streaming_state == PeetsServerProtocol.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
+        elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
             name = remote_user.get_media_prefix() + str(remote_user.requested_seq + 1)
             remote_user.requested_seq += 1
             self.ccnx_int_socket.send_interest(name, self.stream_closure)
+            print 'fetching', name
         else:
           pass
-        print 'end remote'
 
 if __name__ == '__main__':
   peets_factory = PeetsServerFactory("ws://localhost:8000")

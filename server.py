@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
   results = parser.parse_args()
 
-  peets_factory = PeetsServerFactory("ws://localhost:" + str(results.ws))
+  peets_factory = PeetsServerFactory(results.udp, "ws://localhost:" + str(results.ws))
   peets_factory.protocol = PeetsServerProtocol
   listenWS(peets_factory)
 
