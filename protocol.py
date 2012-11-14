@@ -298,7 +298,7 @@ class PeetsMediaTranslator(DatagramProtocol):
           print 'probing', name
           
         elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
-            name = remote_user.get_media_prefix() + str(remote_user.requested_seq + 1)
+            name = remote_user.get_media_prefix() + '/' + str(remote_user.requested_seq + 1)
             remote_user.requested_seq += 1
             self.ccnx_int_socket.send_interest(name, self.stream_closure)
             print 'fetching', name
