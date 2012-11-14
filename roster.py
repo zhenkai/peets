@@ -22,7 +22,7 @@ class Roster(FreshList):
     self.get_local_user = get_local_user
     self.status = self.__class__.Init
     self.session = int(time())
-    self.peetsClosure = PeetsClosure(self.process_peets_msg)
+    self.peetsClosure = PeetsClosure(msg_callback = self.process_peets_msg)
     self.ccnx_sock = CcnxSocket()
     self.ccnx_sock.start()
     self.chronos_sock = SimpleChronosSocket(chatroom_prefix, self.fetch_peets_msg)
@@ -33,8 +33,7 @@ class Roster(FreshList):
     if self.status == self.__class__.Stopped:
       return 
 
-    print self.get_local_user().nick, "Fetching name: " + name
-    self.ccnx_sock.send_interest(Name(name), self.peetsClosure)
+    self.ccnx_sock.send_interest(name, self.peetsClosure)
     
   def process_peets_msg(self, interest, data):
     ''' Assume the interest for peets msg would have a name like this:
@@ -54,13 +53,20 @@ class Roster(FreshList):
       msg = PeetsMessage.from_string(content)
       uid = msg.user.uid
       if msg.msg_type == PeetsMessage.Join:
-        ru = RemoteUser(msg.user)
-        self[uid] = ru
+        #ru = RemoteUser(msg.user)
+        #self[uid] = ru
         self.msg_callback(msg)
       elif msg.msg_type == PeetsMessage.Hello:
-        self.announce_received(uid)
+        try:
+          self.announce_received(uid)
+        except KeyError:
+          self.__class__.__logger.info('Refresh announcement for unknown user %s, treating as Join', uid)
+          #ru = RemoteUser(msg.user)
+          #self[uid] = ru
+          self.msg_callback(msg)
+
       elif msg.msg_type == PeetsMessage.Leave:
-        del self[uid]
+        #del self[uid]
         self.msg_callback(msg)
       else:
         self.__class__.__logger.error("unknown PeetsMessage type")
@@ -108,12 +114,27 @@ class Roster(FreshList):
     
 if __name__ == '__main__':
 
-  def msg_callback(msg):
-    if msg.msg_type == PeetsMessage.Join:
+  def msg_callback_1(msg):
+    global roster1
+    if msg.msg_type == PeetsMessage.Join or msg.msg_type == PeetsMessage.Hello:
       print 'User %s join' % msg.user.nick
       print 'msg is %s' % msg
+      roster1[msg.user.uid] = RemoteUser(msg.user)
+
     elif msg.msg_type == PeetsMessage.Leave:
       print 'User %s left' % msg.user.nick
+      del roster1[msg.user.uid]
+
+  def msg_callback_2(msg):
+    global roster2
+    if msg.msg_type == PeetsMessage.Join or msg.msg_type == PeetsMessage.Hello:
+      print 'User %s join' % msg.user.nick
+      print 'msg is %s' % msg
+      roster2[msg.user.uid] = RemoteUser(msg.user)
+
+    elif msg.msg_type == PeetsMessage.Leave:
+      print 'User %s left' % msg.user.nick
+      del roster2[msg.user.uid]
 
   def user_local_info_1():
     return User('tom', '/roster/tom', '12343')
@@ -122,11 +143,11 @@ if __name__ == '__main__':
     return User('jerry', '/roster/jerry', 'lkasjdfs')
 
   print "------ Creating the first roster object ------"
-  roster1 = Roster('/test/chat', msg_callback, user_local_info_1)
+  roster1 = Roster('/test/chat', msg_callback_1, user_local_info_1)
   msg1 = PeetsMessage(PeetsMessage.Join, user_local_info_1(), None)
-  sleep(2)
+  sleep(5)
   print "------ Creating the second roster object ------"
-  roster2 = Roster('/test/chat', msg_callback, user_local_info_2)
+  roster2 = Roster('/test/chat', msg_callback_2, user_local_info_2)
   msg2 = PeetsMessage(PeetsMessage.Join, user_local_info_2(), None)
 
   sleep(10)

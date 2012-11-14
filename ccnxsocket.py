@@ -66,10 +66,10 @@ class CcnxSocket(object):
     self.ccnx_handle.put(co)
 
   def send_interest(self, name, closure, template = None):
-    self.ccnx_handle.expressInterest(name, closure, template)
+    self.ccnx_handle.expressInterest(Name(name), closure, template)
     
   def register_prefix(self, prefix, closure):
-    self.ccnx_handle.setInterestFilter(prefix, closure)
+    self.ccnx_handle.setInterestFilter(Name(prefix), closure)
 
   def start(self):
     start_new_thread(self.event_loop.run, ())
@@ -81,17 +81,22 @@ class PeetsClosure(Closure):
   ''' A closure for processing PeetsMessage content object
   timeout_callback should return some ccnx upcall return value
   '''
-  def __init__(self, msg_callback, timeout_callback = None):
+  def __init__(self, incoming_interest_callback = None, msg_callback = None, timeout_callback = None):
     super(PeetsClosure, self).__init__()
+    self.incoming_interest_callback = incoming_interest_callback
     self.msg_callback = msg_callback
     self.timeout_callback = timeout_callback
 
   def upcall(self, kind, upcallInfo):
     if kind == pyccn.UPCALL_CONTENT:
-      self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
+      if self.msg_callback is not None:
+        self.msg_callback(upcallInfo.Interest, upcallInfo.ContentObject)
     elif kind == pyccn.UPCALL_INTEREST_TIMED_OUT:
       if self.timeout_callback is not None:
         return self.timeout_callback(upcallInfo.Interest)
+    elif kind == pyccn.UPCALL_INTEREST:
+      if self.incoming_interest_callback is not None:
+        self.incoming_interest_callback(upcallInfo.Interest)
       
     return pyccn.RESULT_OK
 
@@ -102,7 +107,7 @@ if __name__ == '__main__':
   sock1.start()
   sock2.start()
 
-  name = Name('/local/test1')
+  name = '/local/test1'
   content = 'Hello, world!'
   
 
@@ -140,7 +145,7 @@ if __name__ == '__main__':
     counter = 0
     while True:
       if closure.requested_seq - closure.fetched_seq < 5:
-        name = Name(prefix + '/' + str(counter))
+        name = prefix + '/' + str(counter)
         closure.requested_seq = counter
         counter += 1
         sock2.send_interest(name, closure)
@@ -150,7 +155,7 @@ if __name__ == '__main__':
   def publish():
     counter = 0
     while True:
-      name = Name(prefix + '/' + str(counter))
+      name = prefix + '/' + str(counter)
       counter += 1
       content = '%s' % time()
       sock1.publish_content(name, content, 5)

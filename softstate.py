@@ -60,12 +60,7 @@ class FreshList(object):
     
   def announce_received(self, k):
     with self.__rlock:
-      try:
-        self.instances[k].refresh_timestamp()
-      except KeyError as e:
-        FreshList._logger.exception("Try to refresh non-exist state object")
-        print self.instances
-        raise e
+      self.instances[k].refresh_timestamp()
 
   def __getitem__(self, k):
     with self.__rlock:
