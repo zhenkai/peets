@@ -107,11 +107,7 @@ class PeetsServerFactory(WebSocketServerFactory):
       self.client.sendMessage(str(msg))
       name = remote_user.get_sdp_prefix()
       
-      ascii_name = name.encode('ascii', 'ignore')
-      # pyccn can not deal with unicode string and gives not-so-informative error message
-      # TypeError: Must pass a components of the Name
-
-      self.ccnx_socket.send_interest(ascii_name, PeetsClosure(msg_callback = self.sdp_callback))
+      self.ccnx_socket.send_interest(name, PeetsClosure(msg_callback = self.sdp_callback))
       
 
     elif peets_msg.msg_type == PeetsMessage.Leave:

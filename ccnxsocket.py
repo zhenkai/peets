@@ -54,9 +54,16 @@ class CcnxSocket(object):
     si.keyLocator = self.ccnx_key_locator
     return si
 
+  def get_pyccn_name(self, name):
+    if isinstance(name, unicode):
+      return Name(name.encode('ascii', 'ignore'))
+    else:
+      return Name(name)
+    
+
   def publish_content(self, name, content, freshness = 5):
     co =  ContentObject()
-    co.name = Name(name)
+    co.name = self.get_pyccn_name(name)
     co.content = content
 
     si = self.get_signed_info(freshness)
@@ -66,10 +73,12 @@ class CcnxSocket(object):
     self.ccnx_handle.put(co)
 
   def send_interest(self, name, closure, template = None):
-    self.ccnx_handle.expressInterest(Name(name), closure, template)
+    n = self.get_pyccn_name(name)
+    self.ccnx_handle.expressInterest(n, closure, template)
     
   def register_prefix(self, prefix, closure):
-    self.ccnx_handle.setInterestFilter(Name(prefix), closure)
+    p = self.get_pyccn_name(prefix)
+    self.ccnx_handle.setInterestFilter(p, closure)
 
   def start(self):
     start_new_thread(self.event_loop.run, ())
@@ -80,6 +89,8 @@ class CcnxSocket(object):
 class PeetsClosure(Closure):
   ''' A closure for processing PeetsMessage content object
   timeout_callback should return some ccnx upcall return value
+
+  Note: If the subclass of pyccn.Closure is a inner class of some class, it would make ccn_run fail in py-chronos. The reason is unknown. I guess something fishy is happening when the pyccn c code try to call the closure upcall method when the closure class is not resolvable in global name space.
   '''
   def __init__(self, incoming_interest_callback = None, msg_callback = None, timeout_callback = None):
     super(PeetsClosure, self).__init__()
