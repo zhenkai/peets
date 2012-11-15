@@ -53,6 +53,14 @@ class RemoteUser(User, StateObject):
     self.fetched_seq = 0
     self.streaming_state = self.__class__.Stopped
     self.timeouts = 0
+    self.ice_candidate_msg = None
+    self.sdp_sent = False
+
+  def set_ice_candidate_msg(self, candidate_msg):
+    self.ice_candidate_msg = candidate_msg
+
+  def set_sdp_sent(self):
+    self.sdp_sent = True
 
   def reset(self):
     self.requested_seq = 0

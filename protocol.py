@@ -91,6 +91,11 @@ class PeetsServerFactory(WebSocketServerFactory):
     # this is the answer to the local user
     answer_msg = RTCMessage('receive_answer', offer_msg.data)
     self.client.sendMessage(str(answer_msg))
+    remote_user = self.roster[offer_msg.data.socketId]
+    remote_user.set_sdp_sent()
+    # we received ice candidate before sending answer
+    if remote_user.ice_candidate_msg is not None:
+      self.client.sendMessage(str(remote_user.ice_candidate_msg))
 
   def peets_msg_callback(self, peets_msg):
     remote_user = RemoteUser(peets_msg.user)
@@ -170,7 +175,12 @@ class PeetsServerFactory(WebSocketServerFactory):
       candidate = Candidate(('127.0.0.1', str(self.listen_port)))
       d = RTCData(candidate = str(candidate), socketId = data.socketId)
       msg = RTCMessage('receive_ice_candidate', d)
-      self.client.sendMessage(str(msg))
+      remote_user = self.roster[data.socketId]
+      remote_user.set_ice_candidate_msg(msg)
+      # sdp answer has already been sent
+      if remote_user.sdp_sent:
+        self.client.sendMessage(str(msg))
+
       
   def handle_offer(self, client, data):
     if client.media_source_sdp is None:
