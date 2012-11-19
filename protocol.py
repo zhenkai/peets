@@ -227,13 +227,16 @@ class PeetsMediaTranslator(DatagramProtocol):
     self.stream_closure = PeetsClosure(msg_callback = self.stream_callback, timeout_callback = self.stream_timeout_callback)
     self.probe_closure = PeetsClosure(msg_callback = self.probe_callback, timeout_callback = self.probe_timeout_callback)
     self.scheduler = None
+    self.peets_status = None
     
   def toggle_scheduler(self, status):
     if status == 'Running':
+      self.peets_status = 'Running'
       self.scheduler = Scheduler()
       self.scheduler.start()
       self.scheduler.add_interval_job(self.fetch_media, seconds = 0.01, max_instances = 2)
     elif status == 'Stopped':
+      self.peets_status = 'Stopped'
       for job in self.scheduler.get_jobs():
         self.scheduler.unschedule_job(job)
       self.scheduler.shutdown(wait = True)
@@ -246,7 +249,7 @@ class PeetsMediaTranslator(DatagramProtocol):
       name = c.local_user.get_media_prefix() + '/' + str(c.local_seq)
       c.local_seq += 1
       self.ccnx_con_socket.publish_content(name, data)
-      print 'publish', name
+      #print 'publish', name
 
   def get_info_from_name(self, name):
     comps = str(name).split('/')
@@ -256,7 +259,8 @@ class PeetsMediaTranslator(DatagramProtocol):
     return remote_user, cid, seq
 
   def stream_callback(self, interest, data):
-    print '>> fetched', data.name
+    if self.peets_status != 'Running':
+      return
     content = data.content
     remote_user, cid, seq = self.get_info_from_name(data.name)
     c = self.factory.client
@@ -268,6 +272,8 @@ class PeetsMediaTranslator(DatagramProtocol):
       remote_user.timeouts = 0
 
   def probe_callback(self, interest, data):
+    if self.peets_status != 'Running':
+      return
     content = data.content
     remote_user, cid, seq = self.get_info_from_name(data.name)
     c = self.factory.client
@@ -282,6 +288,8 @@ class PeetsMediaTranslator(DatagramProtocol):
 
   def stream_timeout_callback(self, interest):
     # do not reexpress for non-probing interest
+    if self.peets_status != 'Running':
+      return
     remote_user, cid, seq = self.get_info_from_name(interest.name)
     if remote_user is not None:
       remote_user.timeouts += 1
@@ -291,10 +299,13 @@ class PeetsMediaTranslator(DatagramProtocol):
     return pyccn.RESULT_OK
 
   def probe_timeout_callback(self, interest):
+    if self.peets_status != 'Running':
+      return pyccn.RESULT_OK
+
     comps = str(interest.name).split('/')
     cid = comps[-2]
     if self.factory.roster is not None and self.factory.roster[cid] is not None:
-      print 'probing timeout', interest.name
+      #print 'probing timeout', interest.name
       return pyccn.RESULT_REEXPRESS
     
   def fetch_media(self):
@@ -305,13 +316,13 @@ class PeetsMediaTranslator(DatagramProtocol):
           template = Interest(childSelector = 1)
           self.ccnx_int_socket.send_interest(name, self.probe_closure, template)
           remote_user.streaming_state = RemoteUser.Probing
-          print 'probing', name
+          #print 'probing', name
           
         elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
             name = remote_user.get_media_prefix() + '/' + str(remote_user.requested_seq + 1)
             remote_user.requested_seq += 1
             self.ccnx_int_socket.send_interest(name, self.stream_closure)
-            print 'fetching', name
+            #print 'fetching', name
         else:
           pass
 
