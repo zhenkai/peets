@@ -23,7 +23,15 @@ class CcnxLoop(object):
         outputs.append(self.handle)
 
       # time out is in seconds
-      select.select(inputs, outputs, [], 0.05)
+      try:
+        select.select(inputs, outputs, [], 0.05)
+      except TypeError:
+        # sometimes when use Ctrl-C to kill the process
+        # it would have TypeError: an integer is required
+        # have no idea what is the problem yet
+        # but since we are shutting down, so probably it's ok 
+        # to ignore this problem
+        pass
 
   def stop(self):
     self.running = False
