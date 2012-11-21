@@ -11,6 +11,7 @@ import pyccn
 from apscheduler.scheduler import Scheduler
 import operator
 from time import sleep
+from pktparser import StunPacket
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -29,7 +30,6 @@ class PeetsServerProtocol(WebSocketServerProtocol):
 
     return wrapper
 
-
   def __init__(self, *args, **kwargs):
     #WebSocketServerProtocol.__init__(self, *args, **kwargs)
     lst = map(lambda x: random.choice(string.ascii_letters + string.digits), range(16))
@@ -40,6 +40,8 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     self.media_source_sdp = None
     self.ip = None
     self.local_seq = 0
+    self.stun_seqs = {}
+    self.remote_cids = {}
 
     
   def onOpen(self):
@@ -166,7 +168,10 @@ class PeetsServerFactory(WebSocketServerFactory):
   def handle_ice_candidate(self, client, data):
     candidate = Candidate.from_string(data.candidate)
     if client.media_sink_ports.get(data.socketId) is None:
-      client.media_sink_ports[data.socketId] = int(candidate.port)
+      port = int(candidate.port)
+      client.media_sink_ports[data.socketId] = port
+      client.stun_seqs[port] = 0
+      client.remote_cids[port] = data.socketId
       if client.media_source_port is None:
         client.media_source_port = int(candidate.port)
       if client.ip is None:
@@ -226,6 +231,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     self.ccnx_con_socket.start()
     self.stream_closure = PeetsClosure(msg_callback = self.stream_callback, timeout_callback = self.stream_timeout_callback)
     self.probe_closure = PeetsClosure(msg_callback = self.probe_callback, timeout_callback = self.probe_timeout_callback)
+    self.stun_probe_closure = PeetsClosure(msg_callback = self.stun_probe_callback, timeout_callback = self.stun_probe_timeout_callback)
     self.scheduler = None
     self.peets_status = None
     
@@ -241,15 +247,60 @@ class PeetsMediaTranslator(DatagramProtocol):
         self.scheduler.unschedule_job(job)
       self.scheduler.shutdown(wait = True)
       self.scheduler = None
-
+       
   def datagramReceived(self, data, (host, port)):
-    # only publishes one copy of the video
+    ''' 
+    1. Differentiate RTP vs RTCP
+    RTCP: packet type (PT) = 200 - 208
+    SR (sender report)        200
+    RR (receiver report)      201
+    SDES (source description) 202
+    BYE (goodbye)             203
+    App (application-defined) 204
+    other types go until      208
+    RFC 5761 (implemented by WebRTC) makes sure that RTP's PT field
+    plus M field (which is equal to the PT field in RTCP) would not conflict
+
+    2. Differentiate STUN vs RTP & RTCP
+    STUN: the most significant 2 bits of every STUN msg MUST be zeros (RFC 5389)
+    RTP & RTCP: version bits (2 bits) value equals 2
+    '''
+    # mask to test most significant 2 bits
+    mask = 3 << 6
+    msg = bytearray(data)
     c = self.factory.client
+
+    # This is stun packet
+    mm = None
+    if msg[0] & mask == 0:
+      # Tried to fake a Stun request and response so that we don't have to
+      # relay stun msgs to NDN, but failed.
+      # the faked stun request always got 401 unauthorized error
+      # even when just modify the legitimate request by changing username
+      # or transaction id, we still got the same error
+      # so for now we'll give up and relay this dirty thing to NDN
+      # but this is so sad, we should definitely clean this if it is possible
+      stun_seq = c.stun_seqs[port]
+      cid = c.remote_cids[port]
+      name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
+      c.stun_seqs[port] = stun_seq + 1
+      self.ccnx_con_socket.publish_content(name, data)
+
+    # this is RTCP packet
+    elif msg[1] > 199 and msg[1] < 209:
+      # do nothing
+      pass
+    # RTP packet
+
+    #else:
+      # only publishes one copy of the video
     if c.media_source_port == port:
       name = c.local_user.get_media_prefix() + '/' + str(c.local_seq)
       c.local_seq += 1
-      self.ccnx_con_socket.publish_content(name, data)
-      #print 'publish', name
+      if mm is not None:
+        self.ccnx_con_socket.publish_content(name, mm)
+      else:
+        self.ccnx_con_socket.publish_content(name, data)
 
   def get_info_from_name(self, name):
     comps = str(name).split('/')
@@ -286,6 +337,44 @@ class PeetsMediaTranslator(DatagramProtocol):
       remote_user.timeouts = 0
       remote_user.streaming_state = RemoteUser.Streaming
 
+  def stun_probe_callback(self, interest, data):
+    if self.peets_status != 'Running':
+      return
+    # /remote-prefix/remote-nick/remote-uid/stun/self-uid/seq 
+    comps = str(data.name).split('/')
+    seq = comps[-1]
+    cid = comps[-4]
+    remote_user = self.factory.roster[cid]
+
+    content = data.content
+    c = self.factory.client
+    if cid in c.media_sink_ports:
+      self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+    
+    name_comps = comps[:-1]
+    new_seq = int(seq) + 1
+    name_comps.append(str(new_seq))
+    name = '/'.join(name_comps)
+    # fetch the next stun message
+    self.ccnx_int_socket.send_interest(name, self.stun_probe_closure)
+    
+  def stun_probe_timeout_callback(self, interest):
+    if self.peets_status != 'Running':
+      return pyccn.RESULT_OK
+
+    comps = str(interest.name).split('/')
+    with_seq = True
+    try:
+      int(comps[-1])
+    except ValueError:
+      with_seq = False
+
+    cid = comps[-4] if with_seq else comps[-3]
+    if self.factory.roster is not None and self.factory.roster[cid] is not None:
+      #print 'probing timeout', interest.name
+      return pyccn.RESULT_REEXPRESS
+
+
   def stream_timeout_callback(self, interest):
     # do not reexpress for non-probing interest
     if self.peets_status != 'Running':
@@ -316,6 +405,10 @@ class PeetsMediaTranslator(DatagramProtocol):
           template = Interest(childSelector = 1)
           self.ccnx_int_socket.send_interest(name, self.probe_closure, template)
           remote_user.streaming_state = RemoteUser.Probing
+
+          # also fetch stun messages
+          stun_name = remote_user.get_stun_prefix() + '/' + self.factory.client.local_user.uid
+          self.ccnx_int_socket.send_interest(stun_name, self.stun_probe_closure, template)
           #print 'probing', name
           
         elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:

@@ -26,6 +26,9 @@ class User(object):
   def get_media_prefix(self):
     return self.prefix + '/' + self.nick + '/' + self.uid + '/media'
 
+  def get_stun_prefix(self):
+    return self.prefix + '/' + self.nick + '/' + self.uid + '/stun'
+
   def get_sdp_prefix(self):
     return self.prefix + '/' + self.nick + '/' + self.uid + '/sdp'
 
