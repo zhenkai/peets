@@ -1,4 +1,64 @@
 from random import uniform
+from struct import unpack
+class RtpPacket(object):
+  ''' A packet class for RTP messages
+   RTP fixed header
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |V=2|P|X|  CC   |M|     PT      |       sequence number         |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                           timestamp                           |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |           synchronization source (SSRC) identifier            |
+   +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+   |            contributing source (CSRC) identifiers             |
+   |                             ....                              |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  '''
+  def __init__(self, data):
+    super(RtpPacket, self).__init__()
+    self.byte_array = bytearray(data)
+
+  def get_cc(self):
+    # b 1111
+    mask = 15
+    return self.byte_array[0] & mask
+
+  def get_m_bit(self):
+    mask = 1 << 7
+    if self.byte_array[1] & mask == 0:
+      return 0
+    else:
+      return 1
+
+  def get_pt(self):
+    mask = ~(1 << 7)
+    return self.byte_array[1] & mask
+
+  def get_seq(self):
+    return self.byte_array[2] * 255 + self.byte_array[3]
+
+  def get_timestamp(self):
+    return self.unpack_int32(self.byte_array[4:8])
+
+  def get_ssrc(self):
+    return self.unpack_int32(self.byte_array[8:12])
+
+  def get_csrcs(self):
+    csrcs = []
+    for x in xrange(self.get_cc()):
+      cscrs.append(self.unpack_int32(self.byte_array[12 + 8 * x : 20 + 8 * x]))
+    
+    return csrcs
+
+  def unpack_int32(self, byte_array):
+    x = unpack('>I', bytes(byte_array))
+    return x[0]
+    
+  def __str__(self):
+    return 'RTP: [cc = %s, M = %s, PT = %s, SeqNo = %s, timestamp = %s, SSRC = %s, CSRCs = %s]' % (str(self.get_cc()), str(self.get_m_bit()), str(self.get_pt()), str(self.get_seq()), str(self.get_timestamp()), str(self.get_ssrc()), str(self.get_csrcs()))
+
 class StunPacket(object):
   ''' A packet class for stun messages (only handles certain type of messages)
 
