@@ -270,9 +270,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     msg = bytearray(data)
     c = self.factory.client
 
-    # This is stun packet
-    mm = None
-    if msg[0] & mask == 0:
+    if msg[0] & mask == 0 || msg[1] > 199 and msg[1] < 209:
       # Tried to fake a Stun request and response so that we don't have to
       # relay stun msgs to NDN, but failed.
       # the faked stun request always got 401 unauthorized error
@@ -286,21 +284,11 @@ class PeetsMediaTranslator(DatagramProtocol):
       c.stun_seqs[port] = stun_seq + 1
       self.ccnx_con_socket.publish_content(name, data)
 
-    # this is RTCP packet
-    elif msg[1] > 199 and msg[1] < 209:
-      # do nothing
-      pass
-    # RTP packet
 
-    #else:
-      # only publishes one copy of the video
-    if c.media_source_port == port:
+    elif c.media_source_port == port:
       name = c.local_user.get_media_prefix() + '/' + str(c.local_seq)
       c.local_seq += 1
-      if mm is not None:
-        self.ccnx_con_socket.publish_content(name, mm)
-      else:
-        self.ccnx_con_socket.publish_content(name, data)
+      self.ccnx_con_socket.publish_content(name, data)
 
   def get_info_from_name(self, name):
     comps = str(name).split('/')
