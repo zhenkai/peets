@@ -11,6 +11,7 @@ import pyccn
 from apscheduler.scheduler import Scheduler
 import operator
 from time import sleep
+from datetime import datetime, timedelta
 from pktparser import StunPacket, RtpPacket, RtcpPacket
 import re
 
@@ -278,38 +279,39 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
 
     if msg[0] & 0xC0 == 0:
-      # Tried to fake a Stun request and response so that we don't have to
-      # relay stun msgs to NDN, but failed.
-      # the faked stun request always got 401 unauthorized error
-      # even when just modify the legitimate request by changing username
-      # or transaction id, we still got the same error
-      # so for now we'll give up and relay this dirty thing to NDN
-      # but this is so sad, we should definitely clean this if it is possible
-#      try:
-#        stun_seq = c.stun_seqs[port]
-#        cid = c.remote_cids[port]
-#        name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
-#        c.stun_seqs[port] = stun_seq + 1
-#        self.ccnx_con_socket.publish_content(name, data)
-#        print 'send', StunPacket(data)
-#        
-#      except KeyError:
-#        pass
       pkt = StunPacket(data)
-      print 'recv', pkt
+      #print 'recv', pkt
       if pkt.get_stun_type() == StunPacket.Request:
-        response = StunPacket(data)
-        response.set_stun_type(StunPacket.Response)
-        response.add_fake_mapped_address()
-        self.transport.write(response.get_bytes(), (host, port))
-        print 'send', response
-        
         request = StunPacket(data)
         request.set_new_trans_id()
         request.fake_username()
         self.transport.write(request.get_bytes(), (host, port))
-        print 'send', request
+        #print 'send', request
 
+        response = StunPacket(data)
+        response.set_stun_type(StunPacket.Response)
+        response.add_fake_mapped_address()
+
+        def send_stun_response():
+          self.transport.write(response.get_bytes(), (host, port))
+          #print 'send', response
+
+        # add artificial delay
+        self.scheduler.add_date_job(send_stun_response, datetime.now() + timedelta(seconds = 0.1))
+        
+
+    # this is actual rtcp
+    elif msg[1] > 199 and msg[1] < 209:
+      try:
+        stun_seq = c.stun_seqs[port]
+        cid = c.remote_cids[port]
+        name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
+        c.stun_seqs[port] = stun_seq + 1
+        self.ccnx_con_socket.publish_content(name, data)
+        #print 'send', RtcpPacket(data)
+        
+      except KeyError:
+        pass
 
     elif c.media_source_port == port:
       name = c.local_user.get_media_prefix() + '/' + str(c.local_seq)
@@ -365,8 +367,9 @@ class PeetsMediaTranslator(DatagramProtocol):
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
       msg = bytearray(content)
-      if msg[0] & 0xC0 == 0:
-        print 'recv: ', StunPacket(content)
+      if msg[0] & 0xC0 != 0 and msg[1] > 199 and msg[1] < 209:
+        #print 'recv: ', RtcpPacket(content)
+        pass
     
     name_comps = comps[:-1]
     new_seq = int(seq) + 1
