@@ -11,7 +11,7 @@ import pyccn
 from apscheduler.scheduler import Scheduler
 import operator
 from time import sleep
-from pktparser import StunPacket
+from pktparser import StunPacket, RtpPacket, RtcpPacket
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -94,6 +94,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.client.sendMessage(str(answer_msg))
     remote_user = self.roster[offer_msg.data.socketId]
     remote_user.set_sdp_sent()
+    print 'SDP', offer_msg.data.sdp
     # we received ice candidate before sending answer
     if remote_user.ice_candidate_msg is not None:
       self.client.sendMessage(str(remote_user.ice_candidate_msg))
@@ -248,10 +249,13 @@ class PeetsMediaTranslator(DatagramProtocol):
        
   def datagramReceived(self, data, (host, port)):
     c = self.factory.client
-    cid = c.remote_cids[port]
-    name = c.local_user.get_media_prefix() + '/' + cid + '/' + str(c.local_seqs[port])
-    c.local_seqs[port] += 1
-    self.ccnx_con_socket.publish_content(name, data)
+    try:
+      cid = c.remote_cids[port]
+      name = c.local_user.get_media_prefix() + '/' + cid + '/' + str(c.local_seqs[port])
+      c.local_seqs[port] += 1
+      self.ccnx_con_socket.publish_content(name, data)
+    except KeyError:
+      pass
 
   def get_info_from_name(self, name):
     # /remote-prefix/remote-nick/remote-uid/media/self-uid/seq
@@ -269,6 +273,13 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+      msg = bytearray(content)
+      if msg[0] & 0xC0 == 0:
+        print 'Name', str(data.name), 'Stun', StunPacket(content)
+      elif msg[1] > 199 and msg[1] < 209:
+        print 'Name', str(data.name), 'RTCP', RtcpPacket(content)
+      else:
+        print 'Name', str(data.name), 'RTP', RtpPacket(content)
 
     if remote_user is not None:
       remote_user.fetched_seq = int(seq)
