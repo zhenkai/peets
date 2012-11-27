@@ -1,5 +1,104 @@
 from random import uniform
 from struct import unpack
+class RtcpPacket(object):
+
+  '''
+        0                   1                   2                   3
+        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+header |V=2|P|    RC   |   PT=SR=200   |             length            |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         SSRC of sender                        |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+sender |              NTP timestamp, most significant word             |
+info   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |             NTP timestamp, least significant word             |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         RTP timestamp                         |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                     sender's packet count                     |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                      sender's octet count                     |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+report |                 SSRC_1 (SSRC of first source)                 |
+block  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  1    | fraction lost |       cumulative number of packets lost       |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |           extended highest sequence number received           |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                      interarrival jitter                      |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         last SR (LSR)                         |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                   delay since last SR (DLSR)                  |
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+report |                 SSRC_2 (SSRC of second source)                |
+block  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  2    :                               ...                             :
+       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+       |                  profile-specific extensions                  |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  '''
+  def __init__(self, data):
+    super(RtcpPacket, self).__init__()
+    self.byte_array = bytearray(data)
+
+  def unpack_int32(self, byte_array):
+    x = unpack('!I', bytes(byte_array))
+    return x[0]
+  
+  def __str__(self):
+    parsed = 0
+    total = len(self.byte_array)
+    comps = ['RTCP, total_len = %s' % str(total)]
+    if self.byte_array[0] & 0x20 != 0:
+      pad = self.byte_array[-1]
+      comps.append('pad = %s' % str(pad))
+    while parsed < total:
+      header = self.byte_array[parsed: parsed + 4] 
+      pt = header[1]
+      byte_len = (header[2] * 255 + header[3] + 1) * 4
+      body = self.byte_array[parsed + 4: parsed + byte_len]
+      parsed += byte_len
+      cc = header[0] & 0x1f
+      if pt == 200:
+        comps.append('[SR, byte_len = %s, rc = %s' % (str(byte_len), str(cc)))
+        comps.append('SSRC = %s' % str(self.unpack_int32(body[:4])))
+        comps.append('NTP1 = %s' % str(self.unpack_int32(body[4:8])))
+        comps.append('NTP2 = %s' % str(self.unpack_int32(body[8:12])))
+        comps.append('timestamp = %s' % str(self.unpack_int32(body[12:16])))
+        comps.append('pc = %s' % str(self.unpack_int32(body[16:20])))
+        comps.append('oc = %s' % str(self.unpack_int32(body[20:24])))
+        body = body[24:]
+        for x in xrange(cc):
+          comps.append('RSSRC = %s' % str(self.unpack_int32(body[:4])))
+          comps.append('high_seq = %s' % str(self.unpack_int32(body[8:12])))
+          comps.append('LSR = %s' % str(self.unpack_int32(body[16:20])))
+          comps.append('DLSR = %s' % str(self.unpack_int32(body[20:24])))
+          body = body[24:]
+        comps.append(']')
+
+      elif pt == 201:
+        comps.append('[Receiver Report ??!! len = %s]' % str(byte_len))
+      elif pt == 202:
+        comps.append('[SDES: ')
+        comps.append('SSRC = %s' % str(self.unpack_int32(body[:4])))
+        item_type = body[4]
+        if item_type == 1:
+          length = body[5]
+          cname = body[6: 6 + length].decode('utf-8')
+          comps.append('CNAME = %s' % cname)
+          comps.append('Remain bytes = %s]' % map(lambda x: '%02X' % x, body[6 + length:]))
+        else:
+          comps.append('[Unknown SDES = %s]' % map(lambda x: '%02X' % x, body))
+      elif pt == 203:
+        comps.append('[Bye: SSRC = %s' % str(self.unpack_int32(body[:4])))
+        comps.append('Remain bytes = %s]' % map(lambda x: '%02X' % x, body[4:]))
+      else:
+        comps.append('[Unknown RTCP type = %s, length = %s]' % (str(pt), str(len(body))))
+    
+    return ', '.join(comps)
+
 class RtpPacket(object):
   ''' A packet class for RTP messages
    RTP fixed header
@@ -53,7 +152,7 @@ class RtpPacket(object):
     return csrcs
 
   def unpack_int32(self, byte_array):
-    x = unpack('>I', bytes(byte_array))
+    x = unpack('!I', bytes(byte_array))
     return x[0]
     
   def __str__(self):
@@ -210,7 +309,7 @@ class StunPacket(object):
         port = value[2] * 255 + value[3]
         comps.append('Port = %s]' % str(port))
       elif attr_head[1] == 6:
-        comps.append('[Username = %s]' % ''.join(map(lambda x: '%02X' % x, value)))
+        comps.append('[Username = %s]' % value.decode('utf-8'))
       else:
         comps.append('[Other Attribute')
         comps.append('header = %s' % ''.join(map(lambda x: '%02X' % x, attr_head)))
@@ -244,4 +343,17 @@ if __name__ == '__main__':
   print s1
   print fs
 
+  d1 = "\x81\xc8\x00\x0c\xd1\xa0\x85a\xef=\xf8t\\\x0e.\x83O\x1e\xa6z|d\xb8\xf0\xde\xc4\\\x98-\x92\xfb\x9cDQ\x94\xa5</\x0f\x1a\x87\xaf$~ `\x12L6\xde5\r\xad\x95\xd5\x04\xc1\xfa\xfbX\xca\xd9\xf5\xa2,\xff\xd3\x05\xbf\xaaMp\xb4\xde\xaeU\xe4H\x1d\xb0\xbcp\x05\xe2\xb9\x0e\n\xd8\x89C)'\x80\x00\x00\x01&]\x80D\xa4d\x00I\x019" 
 
+  d2 = '\x81\xc8\x00\x0c\xd1\xa0\x85a\xdf\xbb\xc6\xa0\xba\xe2\xd7\xe0\xddH\xcc\xe6\x91\x894K\x0f!g\x94\xce\xfa\xf6\xe5\xc1mVr"\xfa\x03Y\xd6\x00Ky\xae\xcd6\xca\xfevgm\x8f\xd0\x84,\xb0i\xe2\xaeH\x85\x98\xbf\xb9\x05H\xbc\xc5\xe3T\xbf3pn\xa3\xd8p5A\x9f\xa3\x9c\x06l*V\xe0\xe2\x1e\xa4i\x80\x00\x00\x02\x83(\x00h\x96\xe9\xdb\xf9\xaf\xe8'
+
+  d3 = '\x81\xc8\x00\x0c\xd1\xa0\x85a\xcd\x15\xcdH\xbc\x07\xba]o8an]\xa1Sw\x91\x11\xb8\xaa\x08\xe5\x9c%\xecCy0\xe6\x8b\x0b\xb3,\xfeh\xba\xbf\xd7\x8ey\xc7\xf24\x86\xcf\x15@fX\xe6a\x14\xb6\xad\xccQ6.c{\x19\xbf\x8a\xbf_\x8fN\x98\x8e\xa8Z\xd5\x1aX\xf8:\xa2\xbb\x84\xc4\x1b\x9f\xf79\xb3\x88)\x0fe\x0b\x0e\xb2\xfav\xc0J\x80\x00\x00\x05Tp\x9c\x86\xf4v\x17\x0c\x96\x0e'
+
+  d4 = '\x81\xc9\x00\x07\xd1\xa0\x85aJiI\xe3=\x98\xb9a\xab\xb5\xc0\xf7dn\xfd\xb5\x0eB\x08\x86,Th\x1a\xf6\x82\xad\xab\xf9]\x1d\x0c\x19\x1e,\x8e\xad\x03\xf7X\x04\xc0\x88\x94\xeb"\xac\xc3E\xca\xf6\xab@\x98\x91\xfc\x0b \x83Z"^\x8bj\x1b\x9d3\xc2\x95\x13\xb7\x84TB\x8d\x81,\xd6\xe4\x07\x1a2\xf3\x80\x80\x00\x00\x0b~\x83N\xa9(\xff"\xde\x9a\''
+
+  d5 = '\x81\xc8\x00\x0c\xd1\xa0\x85a\x84\x12\xf757c\x9b!\x06,\x11a\xa1\xb9\x96\xedZKv?\x9c\xacb\xbe\xf0\xa0\x7fk\xc0\x87\x1eb|\x10Z\xee9\x9b\n\x92\x97\x1e\xed\x80}\xf4\xe5\x12\x0e\\q`O\nPF\x1f@\x0b\x86y\xfe\xc7\xc6\xe0\xe8\xd8\x0bn\rX\xe1Z\x0e\x12\x96\xf9\xdeN\xf9\x10V\xe6\x1d\xad4]\xba\xe4\x97Q\x83\\\xcdi=\x80\x00\x00\x06\r\x1ecL\xb5F\x1c\x98@\xd8'
+  print RtcpPacket(d1)
+  print RtcpPacket(d2)
+  print RtcpPacket(d3)
+  print RtcpPacket(d4)
+  print RtcpPacket(d5)
