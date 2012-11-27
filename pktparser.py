@@ -309,7 +309,7 @@ class StunPacket(object):
         port = value[2] * 255 + value[3]
         comps.append('Port = %s]' % str(port))
       elif attr_head[1] == 6:
-        comps.append('[Username = %s]' % ''.join(map(lambda x: '%02X' % x, value)))
+        comps.append('[Username = %s]' % value.decode('utf-8'))
       else:
         comps.append('[Other Attribute')
         comps.append('header = %s' % ''.join(map(lambda x: '%02X' % x, attr_head)))
@@ -318,30 +318,30 @@ class StunPacket(object):
     return ', '.join(comps)
   
 if __name__ == '__main__':
-#  req0 = '\x00\x01\x00$!\x12\xa4BDclD5EODVxLj\x00\x06\x00 JsdA/ldOghOuec1h3qF906Zuo0uYykm7'
-#  res0 = '\x01\x01\x000!\x12\xa4Bv6rR2kqkHmmd\x00\x01\x00\x08\x00\x01#(\xc0\xa8\x00\x0e\x00\x06\x00 3qF906Zuo0uYykm7JsdA/ldOghOuec1h'
-#
-#  req1 = '\x00\x01\x00$!\x12\xa4Bv6rR2kqkHmmd\x00\x06\x00 3qF906Zuo0uYykm7JsdA/ldOghOuec1h'
-#  res1 = '\x01\x01\x000!\x12\xa4B+bSaqWJSMGgG\x00\x01\x00\x08\x00\x01#)\xc0\xa8\x00\x0e\x00\x06\x00 JsdA/ldOghOuec1h3qF906Zuo0uYykm7'
-#
-#  r0 = StunPacket(req0)
-#  r1 = StunPacket(req1)
-#  s0 = StunPacket(res0)
-#  s1 = StunPacket(res1)
-#
-#  fr = StunPacket(r0.get_bytes())
-#  print fr
-#
-#  fr.set_new_trans_id()
-#  fr.fake_username()
-#  print fr
-#
-#  fs = StunPacket(r0.get_bytes())
-#  fs.set_stun_type(StunPacket.Response)
-#  fs.add_fake_mapped_address()
-#
-#  print s1
-#  print fs
+  req0 = '\x00\x01\x00$!\x12\xa4BDclD5EODVxLj\x00\x06\x00 JsdA/ldOghOuec1h3qF906Zuo0uYykm7'
+  res0 = '\x01\x01\x000!\x12\xa4Bv6rR2kqkHmmd\x00\x01\x00\x08\x00\x01#(\xc0\xa8\x00\x0e\x00\x06\x00 3qF906Zuo0uYykm7JsdA/ldOghOuec1h'
+
+  req1 = '\x00\x01\x00$!\x12\xa4Bv6rR2kqkHmmd\x00\x06\x00 3qF906Zuo0uYykm7JsdA/ldOghOuec1h'
+  res1 = '\x01\x01\x000!\x12\xa4B+bSaqWJSMGgG\x00\x01\x00\x08\x00\x01#)\xc0\xa8\x00\x0e\x00\x06\x00 JsdA/ldOghOuec1h3qF906Zuo0uYykm7'
+
+  r0 = StunPacket(req0)
+  r1 = StunPacket(req1)
+  s0 = StunPacket(res0)
+  s1 = StunPacket(res1)
+
+  fr = StunPacket(r0.get_bytes())
+  print fr
+
+  fr.set_new_trans_id()
+  fr.fake_username()
+  print fr
+
+  fs = StunPacket(r0.get_bytes())
+  fs.set_stun_type(StunPacket.Response)
+  fs.add_fake_mapped_address()
+
+  print s1
+  print fs
 
   d1 = "\x81\xc8\x00\x0c\xd1\xa0\x85a\xef=\xf8t\\\x0e.\x83O\x1e\xa6z|d\xb8\xf0\xde\xc4\\\x98-\x92\xfb\x9cDQ\x94\xa5</\x0f\x1a\x87\xaf$~ `\x12L6\xde5\r\xad\x95\xd5\x04\xc1\xfa\xfbX\xca\xd9\xf5\xa2,\xff\xd3\x05\xbf\xaaMp\xb4\xde\xaeU\xe4H\x1d\xb0\xbcp\x05\xe2\xb9\x0e\n\xd8\x89C)'\x80\x00\x00\x01&]\x80D\xa4d\x00I\x019" 
 
