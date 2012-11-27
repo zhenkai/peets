@@ -270,7 +270,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     msg = bytearray(data)
     c = self.factory.client
 
-    if msg[0] & mask == 0 || msg[1] > 199 and msg[1] < 209:
+    if msg[0] & mask == 0 or msg[1] > 199 and msg[1] < 209:
       # Tried to fake a Stun request and response so that we don't have to
       # relay stun msgs to NDN, but failed.
       # the faked stun request always got 401 unauthorized error
@@ -278,11 +278,14 @@ class PeetsMediaTranslator(DatagramProtocol):
       # or transaction id, we still got the same error
       # so for now we'll give up and relay this dirty thing to NDN
       # but this is so sad, we should definitely clean this if it is possible
-      stun_seq = c.stun_seqs[port]
-      cid = c.remote_cids[port]
-      name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
-      c.stun_seqs[port] = stun_seq + 1
-      self.ccnx_con_socket.publish_content(name, data)
+      try:
+        stun_seq = c.stun_seqs[port]
+        cid = c.remote_cids[port]
+        name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
+        c.stun_seqs[port] = stun_seq + 1
+        self.ccnx_con_socket.publish_content(name, data)
+      except KeyError:
+        pass
 
 
     elif c.media_source_port == port:
