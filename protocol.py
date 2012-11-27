@@ -12,6 +12,7 @@ from apscheduler.scheduler import Scheduler
 import operator
 from time import sleep
 from pktparser import StunPacket, RtpPacket, RtcpPacket
+import re
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -42,6 +43,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     self.local_seq = 0
     self.stun_seqs = {}
     self.remote_cids = {}
+    self.stun_username = None
 
     
   def onOpen(self):
@@ -95,7 +97,9 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.client.sendMessage(str(answer_msg))
     remote_user = self.roster[offer_msg.data.socketId]
     remote_user.set_sdp_sent()
-    print 'RemoteUser:', remote_user, 'SDP:', d
+    matching = re.search('ice-ufrag:([^\r\n]+)', offer_msg.data.sdp)
+    if matching is not None:
+      remote_user.stun_username = matching.group(1)
     # we received ice candidate before sending answer
     if remote_user.ice_candidate_msg is not None:
       self.client.sendMessage(str(remote_user.ice_candidate_msg))
@@ -191,6 +195,9 @@ class PeetsServerFactory(WebSocketServerFactory):
   def handle_offer(self, client, data):
     if client.media_source_sdp is None:
       client.media_source_sdp = data.sdp
+      matching = re.search('ice-ufrag:([^\r\n]+)', data.sdp)
+      if matching is not None:
+        client.stun_username = matching.group(1)
 
     d = RTCData(sdp = client.media_source_sdp, socketId = client.id)
     msg = RTCMessage('receive_offer', d)
@@ -270,7 +277,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     msg = bytearray(data)
     c = self.factory.client
 
-    if msg[0] & 0xC0 == 0 or msg[1] > 199 and msg[1] < 209:
+    if msg[0] & 0xC0 == 0:
       # Tried to fake a Stun request and response so that we don't have to
       # relay stun msgs to NDN, but failed.
       # the faked stun request always got 401 unauthorized error
@@ -278,14 +285,30 @@ class PeetsMediaTranslator(DatagramProtocol):
       # or transaction id, we still got the same error
       # so for now we'll give up and relay this dirty thing to NDN
       # but this is so sad, we should definitely clean this if it is possible
-      try:
-        stun_seq = c.stun_seqs[port]
-        cid = c.remote_cids[port]
-        name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
-        c.stun_seqs[port] = stun_seq + 1
-        self.ccnx_con_socket.publish_content(name, data)
-      except KeyError:
-        pass
+#      try:
+#        stun_seq = c.stun_seqs[port]
+#        cid = c.remote_cids[port]
+#        name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
+#        c.stun_seqs[port] = stun_seq + 1
+#        self.ccnx_con_socket.publish_content(name, data)
+#        print 'send', StunPacket(data)
+#        
+#      except KeyError:
+#        pass
+      pkt = StunPacket(data)
+      print 'recv', pkt
+      if pkt.get_stun_type() == StunPacket.Request:
+        response = StunPacket(data)
+        response.set_stun_type(StunPacket.Response)
+        response.add_fake_mapped_address()
+        self.transport.write(response.get_bytes(), (host, port))
+        print 'send', response
+        
+        request = StunPacket(data)
+        request.set_new_trans_id()
+        request.fake_username()
+        self.transport.write(request.get_bytes(), (host, port))
+        print 'send', request
 
 
     elif c.media_source_port == port:
@@ -308,7 +331,6 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
-      print 'Name: ', str(data.name), 'RTP: ', RtpPacket(content)
 
     if remote_user is not None:
       remote_user.fetched_seq = int(seq)
@@ -344,9 +366,7 @@ class PeetsMediaTranslator(DatagramProtocol):
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
       msg = bytearray(content)
       if msg[0] & 0xC0 == 0:
-        print 'Name: ', str(data.name), 'Stun: ', StunPacket(content)
-      else:
-        print 'Name: ', str(data.name), 'RTCP: ', RtcpPacket(content)
+        print 'recv: ', StunPacket(content)
     
     name_comps = comps[:-1]
     new_seq = int(seq) + 1
@@ -368,7 +388,6 @@ class PeetsMediaTranslator(DatagramProtocol):
 
     cid = comps[-4] if with_seq else comps[-3]
     if self.factory.roster is not None and self.factory.roster[cid] is not None:
-      #print 'probing timeout', interest.name
       return pyccn.RESULT_REEXPRESS
 
 
@@ -391,7 +410,6 @@ class PeetsMediaTranslator(DatagramProtocol):
     comps = str(interest.name).split('/')
     cid = comps[-2]
     if self.factory.roster is not None and self.factory.roster[cid] is not None:
-      #print 'probing timeout', interest.name
       return pyccn.RESULT_REEXPRESS
     
   def fetch_media(self):
@@ -406,13 +424,11 @@ class PeetsMediaTranslator(DatagramProtocol):
           # also fetch stun messages
           stun_name = remote_user.get_stun_prefix() + '/' + self.factory.client.local_user.uid
           self.ccnx_int_socket.send_interest(stun_name, self.stun_probe_closure, template)
-          #print 'probing', name
           
         elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
             name = remote_user.get_media_prefix() + '/' + str(remote_user.requested_seq + 1)
             remote_user.requested_seq += 1
             self.ccnx_int_socket.send_interest(name, self.stream_closure)
-            #print 'fetching', name
         else:
           pass
 

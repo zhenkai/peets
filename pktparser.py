@@ -231,9 +231,9 @@ class StunPacket(object):
     if self.byte_array[21] != 6: 
       print 'Hmm.. Not the right packet to operate fake_username'
     else:
-      #username = bytearray([0x30, 0x4A, 0x32, 0x31, 0x4D, 0x61, 0x65, 0x6B, 0x4D, 0x39, 0x6A, 0x63, 0x78, 0x63, 0x2B, 0x6C, 0x49, 0x66, 0x64, 0x47, 0x48, 0x76, 0x4F, 0x46, 0x41, 0x72, 0x74, 0x30, 0x42, 0x7A, 0x7A, 0x32])
-      prefix = bytearray([0x30, 0x4A, 0x32, 0x31, 0x4D, 0x61, 0x65])
-      self.byte_array[24: 24 + len(prefix)] = prefix
+      length = self.byte_array[22] * 255  + self.byte_array[23]
+      half_len = length / 2
+      self.byte_array[24 : 24 + half_len], self.byte_array[24 + half_len:] = self.byte_array[24 + half_len:], self.byte_array[24 : 24 + half_len]
 
   def set_stun_header(self, header):
     self.byte_array[0:20] = header
