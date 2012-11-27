@@ -58,7 +58,6 @@ class RemoteUser(User, StateObject):
     self.timeouts = 0
     self.ice_candidate_msg = None
     self.sdp_sent = False
-    self.stun_username = None
 
   def set_ice_candidate_msg(self, candidate_msg):
     self.ice_candidate_msg = candidate_msg
