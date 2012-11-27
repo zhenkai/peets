@@ -11,7 +11,7 @@ import pyccn
 from apscheduler.scheduler import Scheduler
 import operator
 from time import sleep
-from pktparser import StunPacket
+from pktparser import StunPacket, RtpPacket, RtcpPacket
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -95,6 +95,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.client.sendMessage(str(answer_msg))
     remote_user = self.roster[offer_msg.data.socketId]
     remote_user.set_sdp_sent()
+    print 'RemoteUser:', remote_user, 'SDP:', d
     # we received ice candidate before sending answer
     if remote_user.ice_candidate_msg is not None:
       self.client.sendMessage(str(remote_user.ice_candidate_msg))
@@ -266,11 +267,10 @@ class PeetsMediaTranslator(DatagramProtocol):
     RTP & RTCP: version bits (2 bits) value equals 2
     '''
     # mask to test most significant 2 bits
-    mask = 3 << 6
     msg = bytearray(data)
     c = self.factory.client
 
-    if msg[0] & mask == 0 or msg[1] > 199 and msg[1] < 209:
+    if msg[0] & 0xC0 == 0 or msg[1] > 199 and msg[1] < 209:
       # Tried to fake a Stun request and response so that we don't have to
       # relay stun msgs to NDN, but failed.
       # the faked stun request always got 401 unauthorized error
@@ -308,6 +308,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+      print 'Name: ', str(data.name), 'RTP: ', RtpPacket(content)
 
     if remote_user is not None:
       remote_user.fetched_seq = int(seq)
@@ -341,6 +342,11 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+      msg = bytearray(content)
+      if msg[0] & 0xC0 == 0:
+        print 'Name: ', str(data.name), 'Stun: ', StunPacket(content)
+      else:
+        print 'Name: ', str(data.name), 'RTCP: ', RtcpPacket(content)
     
     name_comps = comps[:-1]
     new_seq = int(seq) + 1
