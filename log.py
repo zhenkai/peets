@@ -4,7 +4,8 @@ import os
 class Logger(object):
   ''' A global logging facility for peets backend '''
 
-  __filename = '/tmp/peets/backend.log'
+  pid = os.getpid()
+  __filename = '/tmp/peets/%s.log' % str(pid)
 
   dir_name = os.path.dirname(__filename)
   if not os.path.exists(dir_name):
