@@ -79,6 +79,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     # keep the list of remote users
     self.roster = None
     self.listen_port = udp_port
+    self.__class__.__logger.debug('UDP-PORT=%s', str(udp_port))
     self.ccnx_socket = CcnxSocket()
     self.ccnx_socket.start()
     self.local_status_callback = lambda status: 0
@@ -95,7 +96,6 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.client.sendMessage(str(answer_msg))
     remote_user = self.roster[offer_msg.data.socketId]
     remote_user.set_sdp_sent()
-    print 'RemoteUser:', remote_user, 'SDP:', d
     # we received ice candidate before sending answer
     if remote_user.ice_candidate_msg is not None:
       self.client.sendMessage(str(remote_user.ice_candidate_msg))
@@ -219,6 +219,7 @@ class PeetsMediaTranslator(DatagramProtocol):
   If the remote seq is unknown, use a short prefix without seq to probe;
   otherwise use a naive leaking-bucket like method to fetch the remote data
   '''
+  __logger = Logger.get_logger('PeetsMediaTranslator')
   def __init__(self, factory, pipe_size):
     self.factory = factory
     self.pipe_size = pipe_size
@@ -308,7 +309,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
-      print 'Name: ', str(data.name), 'RTP: ', RtpPacket(content)
+      self.__class__.__logger.debug('RTP-DATA:%s', str(data.name))
 
     if remote_user is not None:
       remote_user.fetched_seq = int(seq)
@@ -322,6 +323,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     c = self.factory.client
     if cid in c.media_sink_ports:
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
+      self.__class__.__logger.debug('RTP-DATA:%s', str(data.name))
 
     if remote_user is not None:
       remote_user.requested_seq = int(seq)
@@ -344,9 +346,9 @@ class PeetsMediaTranslator(DatagramProtocol):
       self.transport.write(content, (c.ip, c.media_sink_ports[cid]))
       msg = bytearray(content)
       if msg[0] & 0xC0 == 0:
-        print 'Name: ', str(data.name), 'Stun: ', StunPacket(content)
+        self.__class__.__logger.debug('STUN-DATA:%s', str(data.name))
       else:
-        print 'Name: ', str(data.name), 'RTCP: ', RtcpPacket(content)
+        self.__class__.__logger.debug('RTCP-DATA:%s', str(data.name))
     
     name_comps = comps[:-1]
     new_seq = int(seq) + 1
@@ -368,7 +370,6 @@ class PeetsMediaTranslator(DatagramProtocol):
 
     cid = comps[-4] if with_seq else comps[-3]
     if self.factory.roster is not None and self.factory.roster[cid] is not None:
-      #print 'probing timeout', interest.name
       return pyccn.RESULT_REEXPRESS
 
 
@@ -391,7 +392,6 @@ class PeetsMediaTranslator(DatagramProtocol):
     comps = str(interest.name).split('/')
     cid = comps[-2]
     if self.factory.roster is not None and self.factory.roster[cid] is not None:
-      #print 'probing timeout', interest.name
       return pyccn.RESULT_REEXPRESS
     
   def fetch_media(self):
@@ -406,13 +406,11 @@ class PeetsMediaTranslator(DatagramProtocol):
           # also fetch stun messages
           stun_name = remote_user.get_stun_prefix() + '/' + self.factory.client.local_user.uid
           self.ccnx_int_socket.send_interest(stun_name, self.stun_probe_closure, template)
-          #print 'probing', name
           
         elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
             name = remote_user.get_media_prefix() + '/' + str(remote_user.requested_seq + 1)
             remote_user.requested_seq += 1
             self.ccnx_int_socket.send_interest(name, self.stream_closure)
-            #print 'fetching', name
         else:
           pass
 

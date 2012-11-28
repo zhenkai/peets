@@ -25,6 +25,7 @@ class Logger(object):
     # write to stdout
     ch = logging.StreamHandler()
     ch.setFormatter(formatter)
+    ch.setLevel(logging.WARN)
     logger.addHandler(ch)
     return logger
     
