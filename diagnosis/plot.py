@@ -78,7 +78,14 @@ def get_limits(*args):
   max_t = 0
   min_t = 0x7fffffff
   for (dataset, self_id) in args:
-    for (remote, sequence) in dataset.rtcps.items(): 
+    for (remote, sequence) in dataset.rtps.items(): 
+      times = map(lambda (k, v): k, sequence)
+      if min(times) < min_t:
+        min_t = min(times)
+      if max(times) > max_t:
+        max_t = max(times)
+
+    for (remote, sequence) in dataset.stuns.items(): 
       times = map(lambda (k, v): k, sequence)
       if min(times) < min_t:
         min_t = min(times)
