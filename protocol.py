@@ -40,7 +40,7 @@ class PeetsServerProtocol(WebSocketServerProtocol):
     self.media_source_sdp = None
     self.ip = None
     self.local_seq = 0
-    self.stun_seqs = {}
+    self.ctrl_seqs = {}
     self.remote_cids = {}
 
     
@@ -171,7 +171,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     if client.media_sink_ports.get(data.socketId) is None:
       port = int(candidate.port)
       client.media_sink_ports[data.socketId] = port
-      client.stun_seqs[port] = 0
+      client.ctrl_seqs[port] = 0
       client.remote_cids[port] = data.socketId
       if client.media_source_port is None:
         client.media_source_port = int(candidate.port)
@@ -233,7 +233,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     self.ccnx_con_socket.start()
     self.stream_closure = PeetsClosure(msg_callback = self.stream_callback, timeout_callback = self.stream_timeout_callback)
     self.probe_closure = PeetsClosure(msg_callback = self.probe_callback, timeout_callback = self.probe_timeout_callback)
-    self.stun_probe_closure = PeetsClosure(msg_callback = self.stun_probe_callback, timeout_callback = self.stun_probe_timeout_callback)
+    self.ctrl_probe_closure = PeetsClosure(msg_callback = self.ctrl_probe_callback, timeout_callback = self.ctrl_probe_timeout_callback)
     self.scheduler = None
     self.peets_status = None
     
@@ -274,16 +274,14 @@ class PeetsMediaTranslator(DatagramProtocol):
     if msg[0] & 0xC0 == 0 or msg[1] > 199 and msg[1] < 209:
       # Tried to fake a Stun request and response so that we don't have to
       # relay stun msgs to NDN, but failed.
-      # the faked stun request always got 401 unauthorized error
-      # even when just modify the legitimate request by changing username
-      # or transaction id, we still got the same error
-      # so for now we'll give up and relay this dirty thing to NDN
-      # but this is so sad, we should definitely clean this if it is possible
+      # note that we need to use the username exchanged in the sdps for stun
+      # it worked for a while but magically stopped working, so now we still
+      # send it over NDN
       try:
-        stun_seq = c.stun_seqs[port]
+        ctrl_seq = c.ctrl_seqs[port]
         cid = c.remote_cids[port]
-        name = c.local_user.get_stun_prefix() + '/' + cid + '/' + str(stun_seq)
-        c.stun_seqs[port] = stun_seq + 1
+        name = c.local_user.get_ctrl_prefix() + '/' + cid + '/' + str(ctrl_seq)
+        c.ctrl_seqs[port] = ctrl_seq + 1
         self.ccnx_con_socket.publish_content(name, data)
       except KeyError:
         pass
@@ -331,10 +329,10 @@ class PeetsMediaTranslator(DatagramProtocol):
       remote_user.timeouts = 0
       remote_user.streaming_state = RemoteUser.Streaming
 
-  def stun_probe_callback(self, interest, data):
+  def ctrl_probe_callback(self, interest, data):
     if self.peets_status != 'Running':
       return
-    # /remote-prefix/remote-nick/remote-uid/stun/self-uid/seq 
+    # /remote-prefix/remote-nick/remote-uid/ctrl/self-uid/seq 
     comps = str(data.name).split('/')
     seq = comps[-1]
     cid = comps[-4]
@@ -354,10 +352,10 @@ class PeetsMediaTranslator(DatagramProtocol):
     new_seq = int(seq) + 1
     name_comps.append(str(new_seq))
     name = '/'.join(name_comps)
-    # fetch the next stun message
-    self.ccnx_int_socket.send_interest(name, self.stun_probe_closure)
+    # fetch the next ctrl message
+    self.ccnx_int_socket.send_interest(name, self.ctrl_probe_closure)
     
-  def stun_probe_timeout_callback(self, interest):
+  def ctrl_probe_timeout_callback(self, interest):
     if self.peets_status != 'Running':
       return pyccn.RESULT_OK
 
@@ -403,9 +401,9 @@ class PeetsMediaTranslator(DatagramProtocol):
           self.ccnx_int_socket.send_interest(name, self.probe_closure, template)
           remote_user.streaming_state = RemoteUser.Probing
 
-          # also fetch stun messages
-          stun_name = remote_user.get_stun_prefix() + '/' + self.factory.client.local_user.uid
-          self.ccnx_int_socket.send_interest(stun_name, self.stun_probe_closure, template)
+          # also fetch ctrl messages
+          ctrl_name = remote_user.get_ctrl_prefix() + '/' + self.factory.client.local_user.uid
+          self.ccnx_int_socket.send_interest(ctrl_name, self.ctrl_probe_closure, template)
           
         elif remote_user.streaming_state == RemoteUser.Streaming and remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
             name = remote_user.get_media_prefix() + '/' + str(remote_user.requested_seq + 1)
