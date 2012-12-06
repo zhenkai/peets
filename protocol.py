@@ -12,6 +12,7 @@ from apscheduler.scheduler import Scheduler
 import operator
 from time import sleep
 from pktparser import StunPacket, RtpPacket, RtcpPacket
+from softstate import StateObject
 
 class PeetsServerProtocol(WebSocketServerProtocol):
   ''' a protocol class that interacts with the webrtc.io.js front end to mainly do two things:
@@ -124,8 +125,10 @@ class PeetsServerFactory(WebSocketServerFactory):
       data = RTCData(socketId = remote_user.uid)
       msg = RTCMessage('remove_peer_connected', data)
       self.client.sendMessage(str(msg))
-    else:
-      pass
+    elif peets_msg.msg_type == PeetsMessage.Chat:
+      data = RTCData(socketId = remote_user.uid, messages = peets_msg.extra)
+      msg = RTCMessage('receive_chat_msg', data)
+      self.client.sendMessage(str(msg))
 
   def unregister(self, client):
     if self.client is not None and client.id == self.client.id:
@@ -210,8 +213,9 @@ class PeetsServerFactory(WebSocketServerFactory):
     return self.client is not None and self.roster is not None
 
   def handle_chat(self, client, data):
-    msg = RTCMessage('receive_chat_msg', data)
-    self.broadcast(client, msg)
+    msg = PeetsMessage(PeetsMessage.Chat, self.client.local_user, extra = data.messages)
+    self.roster.chronos_sock.publish_string(self.client.local_user.get_sync_prefix(), self.roster.session, str(msg), StateObject.default_ttl)
+
 
 class PeetsMediaTranslator(DatagramProtocol):
   ''' A translator protocol to relay local udp traffic to NDN and remote NDN traffic to local udp

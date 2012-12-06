@@ -5,12 +5,13 @@ from user import User
 class PeetsMessage(object):
   ''' a message class that carries prescence and NDN related info of a participant
   '''
-  Join, Hello, Leave = range(3)  
+  Join, Hello, Leave, Chat = range(4)  
 
-  def __init__(self, msg_type, user, *args, **kwargs):
+  def __init__(self, msg_type, user, extra = None, *args, **kwargs):
     super(PeetsMessage, self).__init__()
     self.msg_type = msg_type
     self.user =  user
+    self.extra = extra
 
   def __str__(self):
     class PeetsMessageEncoder(json.JSONEncoder):
@@ -22,7 +23,7 @@ class PeetsMessage(object):
   @classmethod
   def from_string(self, str_msg):
     dct = json.loads(str_msg)
-    return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')))
+    return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')), dct.get('extra'))
 
 class RTCMessage(object):
   ''' a class that interacts with webrtc.io.js using their defined message

@@ -68,6 +68,8 @@ class Roster(FreshList):
       elif msg.msg_type == PeetsMessage.Leave:
         #del self[uid]
         self.msg_callback(msg)
+      elif msg.msg_type == PeetsMessage.Chat:
+        self.msg_callback(msg)
       else:
         self.__class__.__logger.error("unknown PeetsMessage type")
     except KeyError as e:
