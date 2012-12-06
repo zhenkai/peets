@@ -3,19 +3,28 @@ import argparse
 import time
 import re
 
+class Pair(object):
+  def __init__(self, *args, **kwargs):
+    super(Pair, self).__init__()
+    self.left = kwargs.get('left')
+    self.right = kwargs.get('right')
+    self.label = kwargs.get('label')
+
+  def __str__(self):
+    return 'L=%s, R=%s, Label=%s' % (str(self.left), str(self.right), self.label)
+
 class DataSet(object):
   def __init__(self):
     super(DataSet, self).__init__()
     self.tag = None
     self.rtps = {}
-    self.rtcps = {}
-    self.stuns = {}
+    self.ctrls = {}
 
   def __str__(self):
-    return 'Tag = %s\nRTPs=%s\nRTCPs=%s\nSTUNs=%s' % (self.tag, self.rtps, self.rtcps, self.stuns)
+    return 'Tag = %s\nRTPs=%sCTRLs=%s' % (self.tag, self.rtps, self.ctrls)
 
 def extract_normal(filename):
-  matchers = [ ('UDP', re.compile('UDP-PORT=(\d+)')), ('RTP', re.compile('RTP-DATA:([\S]+)')), ('RTCP', re.compile('RTCP-DATA:([\S]+)')), ('STUN', re.compile('STUN-DATA:([\S]+)')) ]
+  matchers = [ ('UDP', re.compile('UDP-PORT=(\d+)')), ('RTP-D', re.compile('RTP-DATA:([\S]+)')), ('RTCP-D', re.compile('RTCP-DATA:([\S]+)')), ('STUN-D', re.compile('STUN-DATA:([\S]+)')), ('RTP-I', re.compile('RTP-INT:([\S]+)')), ('CTRL-I', re.compile('CTRL-INT:([\S]+)')) ]
   time_matcher = re.compile('^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),(\d+)')
   dataset = DataSet()
   self_id = None
@@ -38,38 +47,40 @@ def extract_normal(filename):
         try:
           seq = int(comps[-1])
         except ValueError:
-          print 'Illegal name in', line
+          seq = -1
 
-        if label == 'RTCP':
-          try:
-            dataset.rtcps[remote].append((seconds, seq))
-          except KeyError:
-            dataset.rtcps[remote] = []
-            dataset.rtcps[remote].append((seconds, seq))
-        elif label == 'STUN':
-          try:
-            if self_id is None:
-              self_id = comps[-2]
-            dataset.stuns[remote].append((seconds, seq))
-          except KeyError:
-            dataset.stuns[remote] = []
-            dataset.stuns[remote].append((seconds, seq))
-        else:
-          try:
-            dataset.rtps[remote].append((seconds, seq))
-          except KeyError:
-            dataset.rtps[remote] = []
-            dataset.rtps[remote].append((seconds, seq))
+        if label == 'RTCP-D' or label == 'STUN-D':
+          pair = dataset.ctrls[remote].get(seq)
+          if pair is None:
+            dataset.ctrls[remote][seq] = Pair(right = seconds, label = label) 
+          else:
+            pair.right = seconds
+            pair.label = label
 
-  for (remote, sequence) in dataset.rtcps.items():
-    min_seq = min(map(lambda (k, v): v, sequence))
-    times = map(lambda (k, v): k, sequence)
-    dataset.rtcps[remote] = zip(times, range(min_seq, min_seq + len(sequence)))
+          if self_id is None and label == 'STUN-D':
+            self_id = comps[-2]
 
-  for (remote, sequence) in dataset.stuns.items():
-    min_seq = min(map(lambda (k, v): v, sequence))
-    times = map(lambda (k, v): k, sequence)
-    dataset.stuns[remote] = zip(times, range(min_seq, min_seq + len(sequence)))
+
+        elif label == 'RTP-D':
+          pair = dataset.rtps[remote].get(seq)
+          if pair is None:
+            dataset.rtps[remote][seq] = Pair(right = seconds, label = label)
+          else:
+            pair.right = seconds
+            pair.label = label
+
+        elif label == 'RTP-I':
+          try:
+            dataset.rtps[remote][seq] =  Pair(left = seconds, label = label)
+          except KeyError:
+            dataset.rtps[remote] = {}
+            dataset.rtps[remote][seq] =  Pair(left = seconds, label = label)
+        elif label == 'CTRL-I':
+          try:
+            dataset.ctrls[remote][seq] = Pair(left = seconds, label = label)
+          except KeyError:
+            dataset.ctrls[remote] = {}
+            dataset.ctrls[remote][seq] = Pair(left = seconds, label = label)
 
   return dataset, self_id
 
@@ -78,19 +89,14 @@ def get_limits(*args):
   max_t = 0
   min_t = 0x7fffffff
   for (dataset, self_id) in args:
-    for (remote, sequence) in dataset.rtps.items(): 
-      times = map(lambda (k, v): k, sequence)
-      if min(times) < min_t:
-        min_t = min(times)
-      if max(times) > max_t:
-        max_t = max(times)
-
-    for (remote, sequence) in dataset.stuns.items(): 
-      times = map(lambda (k, v): k, sequence)
-      if min(times) < min_t:
-        min_t = min(times)
-      if max(times) > max_t:
-        max_t = max(times)
+    for (remote, dic) in dataset.ctrls.items(): 
+      for (seq, pair) in dic.items():
+        for t in (pair.left, pair.right):
+          if t is not None:
+            if t > max_t:
+              max_t = t
+            if t < min_t:
+              min_t = t
 
   return (min_t, max_t)
 
@@ -98,9 +104,9 @@ def plot_ax(items, ax, min_t, max_t, id_map, portmap, colormap):
   max_s = 0
   min_s = 0x7fffffff
   legends = {}
-  for (remote, sequence) in items:
+  for (remote, dic) in items:
 
-    seqs = map(lambda(k, v): v, sequence)
+    seqs = dic.keys() 
 
     if min(seqs) < min_s:
       min_s = min(seqs)
@@ -108,15 +114,29 @@ def plot_ax(items, ax, min_t, max_t, id_map, portmap, colormap):
       max_s = max(seqs)
 
   remote_count = 0
-  for (remote, sequence) in items:
-    time_shifted = map(lambda (k, v): (k - min_t, v), sequence)
-    pairs = zip(time_shifted, time_shifted[1:])
+  for (remote, dic) in items:
     color = colormap[remote]
     legends[remote] = patches.Rectangle((0, 0,), 1, 5, color = color)
     remote_count += 1
-    for ((t, s), (t1, s1)) in pairs:
-      rect = patches.Rectangle((t, s), (t1 - t), (s1 - s), color = color)
+    for (seq, pair) in dic.items():
+
+      if pair.left is not None and pair.right is not None:
+        x = pair.left - min_t
+        length = pair.right -pair.left
+      if pair.left is not None and pair.right is None:
+        x = pair.left - min_t
+        length = 4 if pair.left + 4 < max_t else max_t - pair.left
+      if pair.left is None and pair.right is not None:
+        x = pair.right - min_t - 0.1
+        length = 0.1
+        hatch = 'x'
+
+      if pair.label == 'RTCP-D':
+        color = 'k'
+
+      rect = patches.Rectangle((x, seq), length, 1, fill = False, color = color)
       ax.add_patch(rect)
+
 
   ids = [] 
   if id_map is not None:
@@ -148,7 +168,7 @@ def get_portmap(*args):
 
 def get_colormap(*args):
   colormap = {}
-  colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+  colors = ['b', 'g', 'r', 'c', 'm', 'y']
   if len(args) > len(colors):
     print "do not support more than %s parites yet" % str(len(colors))
     return
@@ -173,7 +193,7 @@ def plot(*args, **kwargs):
   figname = kwargs['figname']
   id_map = kwargs['id_map']
 
-  col = 3
+  col = 2
   row = len(args)
 
   (min_t, max_t) = get_limits(*args)
@@ -193,19 +213,14 @@ def plot(*args, **kwargs):
     rtp_ax.set_xlabel('time (seconds)', fontsize = 8)
     rtp_ax.set_ylabel('seq', fontsize = 8)
     rtp_ax.set_title(tag + ' (RTP)', fontsize = 8)
-    rtcp_ax = fig.add_subplot(row, col, i + 2)
-    rtcp_ax.set_xlabel('time (seconds)', fontsize = 8)
-    rtcp_ax.set_ylabel('seq', fontsize = 8)
-    rtcp_ax.set_title(tag + ' (RTCP)', fontsize = 8)
-    stun_ax = fig.add_subplot(row, col, i + 3)
-    stun_ax.set_xlabel('time (seconds)', fontsize = 8)
-    stun_ax.set_ylabel('seq', fontsize = 8)
-    stun_ax.set_title(tag + ' (STUN)', fontsize = 8)
-    i += 3
+    ctrl_ax = fig.add_subplot(row, col, i + 2)
+    ctrl_ax.set_xlabel('time (seconds)', fontsize = 8)
+    ctrl_ax.set_ylabel('seq', fontsize = 8)
+    ctrl_ax.set_title(tag + ' (CTRL)', fontsize = 8)
+    i += 2
 
-    plot_ax(dataset.rtcps.items(), rtcp_ax, min_t, max_t, id_map, portmap, colormap)
     plot_ax(dataset.rtps.items(), rtp_ax, min_t, max_t, id_map, portmap, colormap)
-    plot_ax(dataset.stuns.items(), stun_ax, min_t, max_t, id_map, portmap, colormap)
+    plot_ax(dataset.ctrls.items(), ctrl_ax, min_t, max_t, id_map, portmap, colormap)
 
 
   fig.tight_layout()
@@ -222,6 +237,7 @@ if __name__ == '__main__':
   dataset_id_pairs = []
   for f in args.logs:
     dataset_id_pairs.append(extract_normal(f))
+
 
   id_map = {}
   if args.map is not None:
