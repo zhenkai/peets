@@ -354,7 +354,7 @@ class PeetsMediaTranslator(DatagramProtocol):
     name = '/'.join(name_comps)
     # fetch the next ctrl message
     self.ccnx_int_socket.send_interest(name, self.ctrl_probe_closure)
-    self.__class__.__logger.debug('CTRL-INT:%s', str(data.name))
+    self.__class__.__logger.debug('CTRL-INT:%s', str(name))
     
   def ctrl_probe_timeout_callback(self, interest):
     if self.peets_status != 'Running':
@@ -406,7 +406,7 @@ class PeetsMediaTranslator(DatagramProtocol):
           # also fetch ctrl messages
           ctrl_name = remote_user.get_ctrl_prefix() + '/' + self.factory.client.local_user.uid
           self.ccnx_int_socket.send_interest(ctrl_name, self.ctrl_probe_closure, template)
-          self.__class__.__logger.debug('CTRL-INT:%s', name)
+          self.__class__.__logger.debug('CTRL-INT:%s', ctrl_name)
           
         elif remote_user.streaming_state == RemoteUser.Streaming:
           while remote_user.requested_seq - remote_user.fetched_seq < self.pipe_size:
