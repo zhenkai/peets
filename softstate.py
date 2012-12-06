@@ -9,8 +9,7 @@ from log import Logger
 class StateObject(object):
   ''' store the information of a soft-state object'''
 
-#  default_ttl = 60
-  default_ttl = 5
+  default_ttl = 60
 
   def __init__(self, *args, **kwargs):
     super(StateObject, self).__init__()
