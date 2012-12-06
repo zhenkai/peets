@@ -14,7 +14,7 @@ class Logger(object):
   @staticmethod
   def get_logger(name, filename = __filename):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.WARN)
+    logger.setLevel(logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - [%(name)s] - %(levelname)s'\
                                   + ' - %(message)s')
