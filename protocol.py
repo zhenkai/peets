@@ -70,7 +70,7 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   __logger = Logger.get_logger('PeetsServerFactory')
   
-  def __init__(self, udp_port, nick, prefix, chatroom url = None, protocols = [], debug = False, debugCodePaths = False):
+  def __init__(self, udp_port, nick, prefix, chatroom, url = None, protocols = [], debug = False, debugCodePaths = False):
     # super can only work with new style classes which inherits from object
     # apparently WebSocketServerFactory is old style class
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
