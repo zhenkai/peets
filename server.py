@@ -27,13 +27,15 @@ class SimpleFileRewriter(File):
 if __name__ == '__main__':
 #  log.startLogging(sys.stdout)
   parser = argparse.ArgumentParser(description = 'Peets Server')
+  parser.add_argument('-n', '--nick', action = 'store', dest = 'nick', metavar = 'nickname', type=str, help ='the nickname you want to use', required = True)
+  parser.add_argument('-p', '--prefix', action='store', dest = 'prefix', metavar = 'prefix', type=str, help = 'a valid prefix for you data; if you are not sure, ask your site operator', default = '/local/test')
   parser.add_argument('-t', '--tcp', action = 'store', dest = 'tcp', metavar = 'port', type = int, help = 'the port for http', default = 8888)
   parser.add_argument('-w', '--ws', action = 'store', dest = 'ws', metavar = 'port', type = int, help = 'the port for websocket', default = 8000)
   parser.add_argument('-u', '--udp', action = 'store', dest = 'udp', metavar = 'port', type = int,  help = 'the port for udp traffice', default = 9000)
 
   results = parser.parse_args()
 
-  peets_factory = PeetsServerFactory(results.udp, "ws://localhost:" + str(results.ws))
+  peets_factory = PeetsServerFactory(results.udp, results.nick, "ws://localhost:" + str(results.ws))
   peets_factory.protocol = PeetsServerProtocol
   listenWS(peets_factory)
 

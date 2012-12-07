@@ -70,7 +70,7 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   __logger = Logger.get_logger('PeetsServerFactory')
   
-  def __init__(self, udp_port, url = None, protocols = [], debug = False, debugCodePaths = False):
+  def __init__(self, udp_port, nick, url = None, protocols = [], debug = False, debugCodePaths = False):
     # super can only work with new style classes which inherits from object
     # apparently WebSocketServerFactory is old style class
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
@@ -84,6 +84,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.ccnx_socket = CcnxSocket()
     self.ccnx_socket.start()
     self.local_status_callback = lambda status: 0
+    self.nick = nick
 
   def set_local_status_callback(self, callback):
     self.local_status_callback = callback
@@ -111,7 +112,7 @@ class PeetsServerFactory(WebSocketServerFactory):
       
       self.roster[remote_user.uid] = remote_user
       self.__class__.__logger.debug("Peets join message from remote user: %s", remote_user.get_sync_prefix())
-      data = RTCData(socketId = remote_user.uid, username= 'nick' + remote_user.nick)
+      data = RTCData(socketId = remote_user.uid, username= remote_user.nick)
       msg = RTCMessage('new_peer_connected', data)
       self.client.sendMessage(str(msg))
       name = remote_user.get_sdp_prefix()
@@ -126,7 +127,7 @@ class PeetsServerFactory(WebSocketServerFactory):
       msg = RTCMessage('remove_peer_connected', data)
       self.client.sendMessage(str(msg))
     elif peets_msg.msg_type == PeetsMessage.Chat:
-      data = RTCData(socketId = remote_user.uid, messages = peets_msg.extra)
+      data = RTCData(socketId = remote_user.uid, messages = peets_msg.extra, username = remote_user.nick)
       msg = RTCMessage('receive_chat_msg', data)
       self.client.sendMessage(str(msg))
 
@@ -152,6 +153,7 @@ class PeetsServerFactory(WebSocketServerFactory):
     d = RTCData(connections = [])
     msg = RTCMessage('get_peers', d)
     client.sendMessage(str(msg))
+    client.local_user.nick = self.nick
 
   def handle_media_ready(self, client, data):
     if self.client is None:
