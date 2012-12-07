@@ -111,7 +111,7 @@ class PeetsServerFactory(WebSocketServerFactory):
       
       self.roster[remote_user.uid] = remote_user
       self.__class__.__logger.debug("Peets join message from remote user: %s", remote_user.get_sync_prefix())
-      data = RTCData(socketId = remote_user.uid)
+      data = RTCData(socketId = remote_user.uid, username= 'nick' + remote_user.nick)
       msg = RTCMessage('new_peer_connected', data)
       self.client.sendMessage(str(msg))
       name = remote_user.get_sdp_prefix()

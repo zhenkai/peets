@@ -66,6 +66,8 @@ class RTCData(object):
       self.color = kwargs.get('color')
     if kwargs.get('messages') is not None:
       self.messages = kwargs.get('messages')
+    if kwargs.get('username') is not None:
+      self.username = kwargs.get('username')
 
   def __str__(self):
     class RTCDataEncoder(json.JSONEncoder):
