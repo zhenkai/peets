@@ -70,7 +70,7 @@ class PeetsServerFactory(WebSocketServerFactory):
 
   __logger = Logger.get_logger('PeetsServerFactory')
   
-  def __init__(self, udp_port, nick, url = None, protocols = [], debug = False, debugCodePaths = False):
+  def __init__(self, udp_port, nick, prefix, chatroom url = None, protocols = [], debug = False, debugCodePaths = False):
     # super can only work with new style classes which inherits from object
     # apparently WebSocketServerFactory is old style class
     WebSocketServerFactory.__init__(self, url = url, protocols = protocols, debug = debug, debugCodePaths = debugCodePaths)
@@ -85,6 +85,8 @@ class PeetsServerFactory(WebSocketServerFactory):
     self.ccnx_socket.start()
     self.local_status_callback = lambda status: 0
     self.nick = nick
+    self.prefix = prefix
+    self.chatroom = chatroom
 
   def set_local_status_callback(self, callback):
     self.local_status_callback = callback
@@ -154,13 +156,14 @@ class PeetsServerFactory(WebSocketServerFactory):
     msg = RTCMessage('get_peers', d)
     client.sendMessage(str(msg))
     client.local_user.nick = self.nick
+    client.local_user.prefix = self.prefix
 
   def handle_media_ready(self, client, data):
     if self.client is None:
       PeetsServerFactory.__logger.debug('register client %s', client.id)
       self.client = client
       # announce self in NDN
-      self.roster = Roster('/chatroom', self.peets_msg_callback, lambda: self.client.local_user)
+      self.roster = Roster('/ndn/broadcast/' + self.chatroom, self.peets_msg_callback, lambda: self.client.local_user)
       self.local_status_callback('Running')
     else:
       PeetsServerFactory.__logger.debug("Join message from: %s, but we already have a client: %s", client.id, self.client.id)
