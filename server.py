@@ -19,7 +19,10 @@ class SimpleFileRewriter(File):
         html_string = f.read()
         t = Template(html_string)
         global results
-        return t.substitute(PORT=str(results.ws))
+        if results.v:
+          return t.substitute(PORT=str(results.ws), VIDEO='true')
+        else:
+          return t.substitute(PORT=str(results.ws), VIDEO='false')
     else:
       return File.render(self, request)
 
@@ -27,6 +30,7 @@ class SimpleFileRewriter(File):
 if __name__ == '__main__':
 #  log.startLogging(sys.stdout)
   parser = argparse.ArgumentParser(description = 'Peets Server')
+  parser.add_argument('-v', action='store_true', default = False, help='enable video')
   parser.add_argument('-n', '--nick', action = 'store', dest = 'nick', metavar = 'nickname', type=str, help ='the nickname you want to use', required = True)
   parser.add_argument('-p', '--prefix', action='store', dest = 'prefix', metavar = 'prefix', type=str, help = 'a valid prefix for you data; if you are not sure, ask your site operator', default = '/local/test')
   parser.add_argument('-c', '--chatroom', action = 'store', dest = 'chatroom', metavar = 'chatroom', type=str, help ='the chatroom you want to join', default = 'peets_chatroom')
