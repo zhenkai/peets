@@ -5,7 +5,7 @@ from twisted.web.server import Site
 from twisted.web.static import File
 from twisted.python import log
 from autobahn.websocket import listenWS
-from protocol import PeetsServerProtocol, PeetsServerFactory, PeetsMediaTranslator
+from backend.protocol import PeetsServerProtocol, PeetsServerFactory, PeetsMediaTranslator
 import argparse
 from string import Template
 
