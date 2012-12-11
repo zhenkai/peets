@@ -1,8 +1,14 @@
 import logging
 import os
+'''
+.. module:: Logger
+   :platform: Mac OS X, Linux
+   :synopsis: A singleton to provide logging for an peets proxy instance
+.. moduleauthor:: Zhenkai Zhu <zhenkai@cs.ucla.edu>
+'''
 
 class Logger(object):
-  ''' A global logging facility for peets backend '''
+  ''' A global logging facility for peets proxy '''
 
   pid = os.getpid()
   __filename = '/tmp/peets/%s.log' % str(pid)
@@ -12,7 +18,14 @@ class Logger(object):
     os.makedirs(dir_name)
 
   @staticmethod
-  def get_logger(name, filename = __filename):
+  def get_logger(name):
+    ''' Get the logger
+    Args:
+      name: the name of the owner of the logger, usually the class name
+
+    Returns:
+      A logger using the default configuration here with the name provided
+    '''
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
 
@@ -31,8 +44,8 @@ class Logger(object):
     
 
 
-if __name__ == '__main__':
-  logger = Logger.get_logger('RandomTest')
-  logger.debug("hello")
-  logger.info("world")
+#if __name__ == '__main__':
+#  logger = Logger.get_logger('RandomTest')
+#  logger.debug("hello")
+#  logger.info("world")
 
