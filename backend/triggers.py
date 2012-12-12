@@ -8,8 +8,28 @@ from apscheduler.scheduler import Scheduler
 from apscheduler.triggers import IntervalTrigger
 from random import uniform
 
+'''
+.. module:: trigger
+  :platform: Mac OS X, Linux
+  :synopsis: A random interval trigger to be used by apscheduler.
+
+.. moduleauthor:: Zhenkai Zhu <zhenkai@cs.ucla.edu>
+
+'''
+
 class RandomizedIntervalTrigger(IntervalTrigger):
+  '''A random interval trigger to be used by apscheduler.
+  '''
+
   def __init__(self, interval, start_date = None, randomize = None):
+    '''
+    Args:
+      interal (float): The expected interval for periodic task in seconds.
+    
+    Kwargs:
+      start_date (timedelta): The timedelta from now for the next execution of the task.
+      randomize: Whether use random interval or fixed interval.
+    '''
     super(RandomizedIntervalTrigger, self).__init__(interval, start_date)
     self.randomize = randomize
 
