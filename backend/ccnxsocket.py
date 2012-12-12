@@ -4,23 +4,12 @@ from thread import start_new_thread
 import select
 from log import Logger
 '''
-.. module:: CcnxLoop
+.. module:: ccnxsocket
    : platform: Mac OS X, Linux
    : synopsis: A loop that runs ccn_run.
 
 .. moduleauthor:: Zhenkai Zhu < zhenkai@cs.ucla.edu>
 
-.. module:: CcnxSocket
-   : platform: Mac OS X, Linux
-   : synopsis: A socket like interface for interacting with PyCCN.
-
-.. moduleauthor:: Zhenkai Zhu < zhenkai@cs.ucla.edu>
-
-.. module:: PeetsClosure
-   : platform: Mac OS X, Linux
-   : synopsis: A common closure class so user only needs to define the callback. Closure is required by PyCCN.
-
-.. moduleauthor:: Zhenkai Zhu < zhenkai@cs.ucla.edu>
 '''
 
 class CcnxLoop(object):
@@ -93,11 +82,13 @@ class CcnxSocket(object):
   def get_signed_info(self, freshness):
     '''
     Get signed info to be included in the Content Object
+
     Args:
       freshness (int): the freshness of the Content Object in seconds
 
     Returns:
       a PyCCN.SignedInfo object 
+
     '''
     si = pyccn.SignedInfo()
     si.publisherPublicKeyDigest = self.ccnx_key.publicKeyID
