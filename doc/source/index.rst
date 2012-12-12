@@ -28,6 +28,8 @@ test2
 .. automodule:: backend.ccnxsocket
   :members:
 
+.. automodule:: backend.user
+  :members:
 
 Indices and tables
 ==================

@@ -172,6 +172,7 @@ class PeetsClosure(Closure):
   '''
   def __init__(self, incoming_interest_callback = None, msg_callback = None, timeout_callback = None):
     '''Customize the PyCCN.Closure subclass
+
     Kwargs:
       incoming_interest_callback: the callback function to be used by PyCCN when an Interest for this closure comes; takes PyCCN.UpcallInfo.Interest as the input
       msg_callback: the callback function to be used by PyCCN when an ContentObject is fetched; takes PyCCN.UpcallInfo.Interest and PyCCN.UpcallInfo.ContentObject as inputs
