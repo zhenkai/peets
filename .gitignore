@@ -5,3 +5,4 @@ test.py
 *.DS_*
 *.so
 *.pdf
+build/
