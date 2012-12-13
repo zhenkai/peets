@@ -21,27 +21,27 @@ class StateObject(object):
   default_ttl = 60
 
   def __init__(self, *args, **kwargs):
-  '''
+    '''
 
-  Kwargs:
-    timestamp (float): the time in seconds since the epoch
-    ttl (float): the time-to-live for state object
-  '''
+    Kwargs:
+      timestamp (float): the time in seconds since the epoch
+      ttl (float): the time-to-live for state object
+    '''
     super(StateObject, self).__init__()
     self.timestamp = kwargs.get('timestamp', time())
     self.ttl = kwargs.get('ttl', StateObject.default_ttl)
 
   def is_active(self):
-  '''
+    '''
 
-  Returns:
-    A boolean value to indicate whether or not this state object has been timed out.
-  '''
+    Returns:
+      A boolean value to indicate whether or not this state object has been timed out.
+    '''
     return (time() - self.timestamp < self.ttl)
 
   def refresh_timestamp(self):
-  '''Set a new timestamp for this state object.
-  '''
+    '''Set a new timestamp for this state object.
+    '''
     self.timestamp = time()
 
 class FreshList(object):

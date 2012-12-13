@@ -260,6 +260,7 @@ class PeetsServerFactory(WebSocketServerFactory):
   # this method is local, i.e. no leak to NDN
   def handle_ice_candidate(self, client, data):
     '''Handle ice candidate from local user.
+
     Args:
       client : local user
       data : ice candidate message from local user.
@@ -291,6 +292,7 @@ class PeetsServerFactory(WebSocketServerFactory):
       
   def handle_offer(self, client, data):
     '''Handle the offer (sdp) from the front end
+
     Args:
       client : local user
       data : offer sdp message

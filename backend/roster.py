@@ -28,12 +28,13 @@ class Roster(FreshList):
   (Init, Joined, Stopped) = range(3)
 
   def __init__(self, chatroom_prefix, msg_callback, get_local_user, *args, **kwargs):
-  '''
-  Args:
-    chatroom_prefix (str): A broadcast prefix for the chatroom; this is used by Chronos for it's sync Interests.
-    msg_callbck : The callback function when a Peets Message comes.
-    get_local_user : A function that returns the local user information.
-  '''
+    '''
+    Args:
+      chatroom_prefix (str): A broadcast prefix for the chatroom; this is used by Chronos for it's sync Interests.
+      msg_callbck : The callback function when a Peets Message comes.
+      get_local_user : A function that returns the local user information.
+    '''
+
     super(Roster, self).__init__(self.announce, self.reap_callback, *args, **kwargs)
     self.msg_callback = msg_callback
     self.get_local_user = get_local_user
@@ -47,8 +48,8 @@ class Roster(FreshList):
     self.schedule_next(0.5, self.announce)
 
   def fetch_peets_msg(self, name):
-  '''A wrapper function for fetching peets msg. If the local user has stopped participanting, then don't fetch the peets msg.
-  '''
+    '''A wrapper function for fetching peets msg. If the local user has stopped participanting, then don't fetch the peets msg.
+    '''
     if self.status == self.__class__.Stopped:
       return 
 

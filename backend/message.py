@@ -20,14 +20,15 @@ class PeetsMessage(object):
   Join, Hello, Leave, Chat = range(4)  
 
   def __init__(self, msg_type, user, extra = None, *args, **kwargs):
-  '''
-  Args:
-    msg_type : one of Join, Hello, Leave, and Chat
-    user (User): the originator
-  
-  Kwargs:
-    extra : piggyback message. Right now it's piggybacking text chat message.
-  '''
+    '''
+    Args:
+      msg_type : one of Join, Hello, Leave, and Chat
+      user (User): the originator
+    
+    Kwargs:
+      extra : piggyback message. Right now it's piggybacking text chat message.
+    '''
+
     super(PeetsMessage, self).__init__()
     self.msg_type = msg_type
     self.user =  user
