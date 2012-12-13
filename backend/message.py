@@ -2,12 +2,32 @@ import json
 from log import Logger
 from user import User
 
+'''
+.. module:: message
+  :platform: Mac OS X, Linux
+  :synopsis: Various kinds of messages used by Peets, both in NDN communication and in the communication with WebRTC frontend.
+
+.. moduleauthor:: Zhenkai Zhu <zhenkai@cs.ucla.edu>
+
+'''
+
 class PeetsMessage(object):
-  ''' a message class that carries prescence and NDN related info of a participant
+  '''This message indicates the prescence of the user. 
+  We cheated a little bit here by adding an extra field in the message.
+  Basically that allows you to piggyback anything (supposed small and infrequent)
   '''
+
   Join, Hello, Leave, Chat = range(4)  
 
   def __init__(self, msg_type, user, extra = None, *args, **kwargs):
+  '''
+  Args:
+    msg_type : one of Join, Hello, Leave, and Chat
+    user (User): the originator
+  
+  Kwargs:
+    extra : piggyback message. Right now it's piggybacking text chat message.
+  '''
     super(PeetsMessage, self).__init__()
     self.msg_type = msg_type
     self.user =  user
@@ -22,13 +42,26 @@ class PeetsMessage(object):
 
   @classmethod
   def from_string(self, str_msg):
+    '''
+    Args:
+      str_msg: A string from of message.
+    
+    Returns:
+      A PeetsMessage object.
+    '''
     dct = json.loads(str_msg)
     return PeetsMessage(dct.get('msg_type'), User(**dct.get('user')), dct.get('extra'))
 
 class RTCMessage(object):
-  ''' a class that interacts with webrtc.io.js using their defined message
+  ''' A message that interacts with webrtc.io.js using their defined message
   '''
   def __init__(self, eventName, data, *args, **kwargs):
+    '''
+    Args:
+      eventName (str): Event name used in webrtc frontend.
+      data (RTCData): The RTCData for the frontend
+    '''
+
     super(RTCMessage, self).__init__()
     self.eventName = eventName
     self.data = data
@@ -41,15 +74,34 @@ class RTCMessage(object):
 
   @classmethod
   def from_string(self, str_msg):
-    # for some reason, the object_hook of json.loads would be caused twice if the str_msg includes nested dict
-    # hence here no object_hook is used
+    '''
+    Args:
+      str_msg: A string from of message.
+    
+    Returns:
+      A RTCMessage object.
+
+    for some reason, the object_hook of json.loads would be caused twice if the str_msg includes nested dict
+    hence here no object_hook is used
+    '''
     dct = json.loads(str_msg)
     return RTCMessage(dct.get('eventName'), RTCData(**dct.get('data')))
   
 class RTCData(object):
-  ''' a class that manipulates the data part of the message in webrtc.io.js
+  ''' a Message class that manipulates the data part of the message in webrtc.io.js
   '''
   def __init__(self, *args, **kwargs):
+    '''
+    Kwargs:
+      sdp (str) : the sdp decription string
+      socketId (str) : the socketId string
+      candidate (str) : the Stun candidate string
+      room (str) : the name of chatroom
+      connections (list) : a list of socket id
+      color (str) : the color for the text message
+      messages (str) : the text message
+      username (str) : the username of the message originator
+    '''
     super(RTCData, self).__init__()
     if kwargs.get('sdp') is not None:
       self.sdp = kwargs.get('sdp')
@@ -78,15 +130,26 @@ class RTCData(object):
 
   @classmethod
   def from_string(self, str_msg):
+    '''
+    Args:
+      str_msg: A string from of message.
+    
+    Returns:
+      A RTCData object.
+    '''
     def as_message(dct):
       return RTCData(sdp = dct.get('sdp'), socketId = dct.get('socketId'), candidate = dct.get('candidate'), room = dct.get('room'), connections = dct.get('connections'))
 
     return json.loads(str_msg, object_hook = as_message)
 
 class Candidate(object):
-  ''' a class that manipulates candidate msg used in webrtc
+  ''' A class that manipulates candidate msg used in webrtc
   '''
   def __init__(self,  portmap, *args, **kwargs):
+    '''
+    Args:
+      portmap ((str, int)): A pair of IP and port for the Stun candidate
+    '''
     super(Candidate, self).__init__()
     self.ip, self.port = portmap
 
@@ -95,6 +158,13 @@ class Candidate(object):
 
   @classmethod
   def from_string(self, str_msg):
+    '''
+    Args:
+      str_msg: A string from of message.
+    
+    Returns:
+      A Candidate object.
+    '''
     strs = str_msg.split()
     return Candidate((strs[4], strs[5]))
     
