@@ -1,3 +1,6 @@
 [submodule "frontend"]
 	path = frontend
 	url = git@github.com:zhenkai/webrtc.io-demo.git
+[submodule "py-chronos"]
+	path = py-chronos
+	url = git://github.com/zhenkai/py-chronos.git
